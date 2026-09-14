@@ -181,3 +181,5 @@ test_output/
 web/frontend/node_modules/
 !web/frontend/src/lib/
 !web/frontend/src/lib/*.ts
+
+datasets/
