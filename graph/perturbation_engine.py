@@ -26,6 +26,7 @@ class PerturbationPipeline:
         perturbations: List[Tuple[Perturbation, int]],
         labeling_functions: List[LabelingFunction],
         max_iterations: int = 10,
+        chain_length: int = 4
     ):
         """
         Args:
@@ -41,6 +42,7 @@ class PerturbationPipeline:
         self.perturbations = perturbations
         self.labeling_functions = labeling_functions
         self.max_iterations = max_iterations
+        self.chain_length = chain_length
 
     def _compute_labels(self, graph: nx.Graph) -> LabelingResult:
         """Compute labels using all labeling functions.
@@ -93,6 +95,138 @@ class PerturbationPipeline:
                     hint.edges.add(PerturbationHint.normalize_edge(u, v))
         return hint
 
+    def apply_single_perturbation(self, graph: nx.Graph, perturbation, desired_count, original_result):
+        successes = 0
+        attempts = 0
+
+        while successes < desired_count and attempts < self.max_iterations:
+            attempts += 1
+
+            # Always apply to the original graph
+            candidate_graph, changes = perturbation.apply(
+                graph, hint=original_result.hint
+            )
+
+            # Check for label changes
+            candidate_result = self._compute_labels(candidate_graph)
+            candidate_labels = candidate_result.node_labels
+            changed_nodes = {
+                node: (original_result.node_labels.get(node), candidate_labels[node])
+                for node in candidate_labels
+                if candidate_labels[node] != original_result.node_labels.get(node)
+            }
+
+            if changed_nodes:
+                successes += 1
+                return {
+                    "perturbed_graph": candidate_graph,
+                    "changes": changes,
+                    "changed_nodes": changed_nodes,
+                    "labeling_result": candidate_result,
+                    "original_labeling_result": original_result,
+                    "perturbation_folder": perturbation.folder_name,
+                }
+        return None
+
+    def test_chain_perturbation(self, perturbation, graph: nx.Graph, original_result, desired_result = False):
+        attempts = 0
+        result = False
+
+        candidate_graph = graph
+        candidate_result = original_result
+
+        changes = None
+        changed_nodes = None
+
+        while result is False and attempts < self.max_iterations:
+            attempts += 1
+
+            # Always apply to the original graph
+            candidate_graph, changes = perturbation.apply(
+                graph, hint = original_result.hint
+            )
+
+            # Check for label changes
+            candidate_result = self._compute_labels(candidate_graph)
+            candidate_labels = candidate_result.node_labels
+            changed_nodes = {
+                node: (original_result.node_labels.get(node), candidate_labels[node])
+                for node in candidate_labels if candidate_labels[node] != original_result.node_labels.get(node)
+            }
+
+            if changed_nodes:
+                result = desired_result
+            else:
+                result = not desired_result
+
+        return (result, candidate_graph, candidate_result, changes)
+    
+    def test_subchain(self, chain, subchain, current_length, subchain_length, graph: nx.Graph, original_result):
+        out = True
+        
+        if current_length >= subchain_length:
+            acc_graph = graph
+            acc_result = original_result
+
+            result = None
+
+            for perturbation, _, _ in subchain:
+                result, acc_graph, acc_result, _ = self.test_chain_perturbation(perturbation, acc_graph, acc_result)
+    
+            out = result is True
+        else:
+            for perturbation in [p for p in chain if p not in subchain]:
+                out = self.test_subchain(chain, subchain + [perturbation], len(subchain) + 1, subchain_length, graph, original_result)
+                
+                if out is False:
+                    break;
+        return out
+
+    def find_chain(self, chain, current_length, chain_length, graph: nx.Graph, original_result, chains):
+        if current_length >= chain_length:
+            acc_graph = graph
+            acc_result = original_result
+
+            result = None
+
+            for perturbation, _, _ in chain:
+                result, acc_graph, acc_result, _ = self.test_chain_perturbation(perturbation, acc_graph, acc_result)
+    
+            if result is True:
+                chains.append(chain)
+        else:
+            for perturbation, _ in self.perturbations:
+                discard = False
+                result, candidate_graph, _, changes = self.test_chain_perturbation(perturbation, graph, original_result)
+
+                if result is False:
+                    continue
+
+                candidate_chain = chain + [(perturbation, candidate_graph, changes)]
+
+                # Discard the perturbation if one of the possible sub-chains involving it changes labels
+                for subchain_length in range(2, min(len(candidate_chain), chain_length)):
+                    for perturb in candidate_chain:
+                        if self.test_subchain(candidate_chain, [perturb], 1, subchain_length, graph, original_result) is False:
+                            discard = True
+
+                if discard is True:
+                    continue;
+
+                self.find_chain(chain + [(perturbation, candidate_graph, changes)], len(chain) + 1, chain_length, graph, original_result, chains)
+
+    def find_chains(self, chain_length, graph: nx.Graph, original_result):
+        chains = []
+
+        for perturbation, _ in self.perturbations:
+            result, candidate_graph, _, changes = self.test_chain_perturbation(perturbation, graph, original_result)
+
+            if result is False:
+                continue
+
+            self.find_chain([(perturbation, candidate_graph, changes)], 1, chain_length, graph, original_result, chains)
+        return chains
+        
     def apply_and_check(self, graph: nx.Graph) -> List[Dict[str, Any]]:
         """Apply perturbations to the original graph, only accepting those that change labels.
 
@@ -118,39 +252,24 @@ class PerturbationPipeline:
             - 'perturbation_folder': folder_name of the perturbation that produced this variant
         """
         original_result = self._compute_labels(graph)
-        original_labels = original_result.node_labels
         results = []
+        chain_results = []
 
         for perturbation, desired_count in self.perturbations:
-            successes = 0
-            attempts = 0
+            result = self.apply_single_perturbation(graph, perturbation, desired_count, original_result)
 
-            while successes < desired_count and attempts < self.max_iterations:
-                attempts += 1
+            if result is not None:
+                results.append(result)
 
-                # Always apply to the original graph
-                candidate_graph, changes = perturbation.apply(
-                    graph, hint=original_result.hint
-                )
+        # Search for chains of multiple perturbations
+        for chain_length in range(2, self.chain_length):
+            chain_results.extend(self.find_chains(chain_length, graph, original_result))
 
-                # Check for label changes
-                candidate_result = self._compute_labels(candidate_graph)
-                candidate_labels = candidate_result.node_labels
-                changed_nodes = {
-                    node: (original_labels.get(node), candidate_labels[node])
-                    for node in candidate_labels
-                    if candidate_labels[node] != original_labels.get(node)
-                }
-
-                if changed_nodes:
-                    successes += 1
-                    results.append({
-                        "perturbed_graph": candidate_graph,
-                        "changes": changes,
-                        "changed_nodes": changed_nodes,
-                        "labeling_result": candidate_result,
-                        "original_labeling_result": original_result,
-                        "perturbation_folder": perturbation.folder_name,
-                    })
-
+        if len(chain_results) > 0:
+            print('')
+            print('--------------------------')
+            print('Perturbation chain results')
+            print('--------------------------')
+            print(chain_results)
+            print('')
         return results
