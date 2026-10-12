@@ -18,9 +18,9 @@ class Perturbation(abc.ABC):
     """
 
     @abc.abstractmethod
-    def apply(self, graph: nx.Graph,
+    def apply(self, graph: nx.Graph[Any],
               hint: Optional[PerturbationHint] = None
-              ) -> Tuple[nx.Graph, Dict[str, Any]]:
+              ) -> Tuple[nx.Graph[Any], Dict[str, Any]]:
         """Apply this perturbation to a graph.
 
         The implementation must NOT mutate the input graph. It should work

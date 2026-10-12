@@ -1,7 +1,8 @@
 import abc
 import networkx as nx
-from interfaces.labeling_result import LabelingResult
 
+from typing import Any
+from interfaces.labeling_result import LabelingResult
 
 class LabelingFunction(abc.ABC):
     """Abstract base class for labeling a graph.
@@ -14,7 +15,7 @@ class LabelingFunction(abc.ABC):
     """
 
     @abc.abstractmethod
-    def label(self, graph: nx.Graph) -> LabelingResult:
+    def label(self, graph: nx.Graph[Any]) -> LabelingResult:
         """Label the graph and return results.
 
         Args:
