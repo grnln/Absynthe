@@ -2,38 +2,32 @@ import networkx as nx
 
 from typing import Any
 
-from interfaces.perturbation import Perturbation
-from interfaces.labeling_function import LabelingFunction
-
-from interfaces.perturbation_chain_pipeline import PerturbationChainPipeline
-from interfaces.perturbation_chain import AppliedPerturbation, PerturbationChain
+from interfaces import Perturbation, PerturbationWalk, PerturbationChainPipeline, AppliedPerturbation, PerturbationChain, LabelingFunction
 
 class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
     def __init__(
         self,
         graph: nx.Graph[Any],
-        perturbations: list[Perturbation],
+        perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]],
         labeling_functions: list[LabelingFunction],
-        max_iterations: int = 40,
         max_length: int = 4
     ) -> None:
-        super().__init__(graph, perturbations, labeling_functions, max_iterations, max_length)
+        super().__init__(graph, perturbations, labeling_functions, max_length)
 
-    def test_subchain(
+    def _test_subchain(
         self,
         chain: PerturbationChain,
         subchain: PerturbationChain,
-        current_length: int,
         subchain_length: int
     ) -> bool:
         out = True
         
-        if current_length >= subchain_length:
+        if len(subchain) >= subchain_length:
             result = None
             acc_graph = self.graph
 
             for perturbation in subchain:
-                result, acc_graph, _ = self._test_perturbation(perturbation.perturbation, acc_graph)
+                result, acc_graph, _ = self._test_perturbation(perturbation.perturbation, perturbation.walk, acc_graph)
     
             out = result is True
         else:
@@ -41,7 +35,6 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
                 out = self._test_subchain(
                     chain,
                     subchain + PerturbationChain([perturbation]),
-                    len(subchain) + 1,
                     subchain_length
                 )
                 
@@ -49,39 +42,37 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
                     break;
         return out        
 
-    def find_chain(
+    def _find_chain(
         self,
         chain: PerturbationChain,
-        current_length: int,
         chain_length: int,
         chains: list[PerturbationChain]
     ) -> None:
-        if current_length >= chain_length:
+        if len(chain) >= chain_length:
             result = None
             acc_graph = self.graph
 
             for perturbation in chain:
-                result, acc_graph, _ = self._test_perturbation(perturbation.perturbation, acc_graph)
+                result, acc_graph, _ = self._test_perturbation(perturbation.perturbation, perturbation.walk, acc_graph)
     
             if result is True:
                 chains.append(chain)
         else:
-            for perturbation in self.perturbations:
+            for perturbation, walk in self.perturbations:
                 discard = False
-                result, candidate_graph, changes = self._test_perturbation(perturbation, self.graph)
+                result, candidate_graph, changes = self._test_perturbation(perturbation, walk, self.graph)
 
                 if result is False:
                     continue
 
-                candidate_chain = chain + PerturbationChain([AppliedPerturbation(perturbation, candidate_graph, changes)])
+                candidate_chain = chain + PerturbationChain([AppliedPerturbation(perturbation, walk, candidate_graph, changes)])
 
                 # Discard the perturbation if one of the possible sub-chains involving it changes labels
                 for subchain_length in range(2, min(len(candidate_chain), chain_length)):
                     for perturb in candidate_chain:
-                        if self.test_subchain(
+                        if self._test_subchain(
                             candidate_chain,
                             PerturbationChain([perturb]),
-                            1,
                             subchain_length,
                         ) is False:
                             discard = True
@@ -89,9 +80,8 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
                 if discard is True:
                     continue;
 
-                self.find_chain(
-                    chain + PerturbationChain([AppliedPerturbation(perturbation, candidate_graph, changes)]),
-                    len(chain) + 1,
+                self._find_chain(
+                    chain + PerturbationChain([AppliedPerturbation(perturbation, walk, candidate_graph, changes)]),
                     chain_length,
                     chains
                 )

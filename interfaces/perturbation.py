@@ -3,7 +3,8 @@ from typing import Tuple, Dict, Any, Optional
 import networkx as nx
 
 from .perturbation_hint import PerturbationHint
-
+from .perturbation_walk import PerturbationWalk
+from .perturbation_chain import PerturbationChain
 
 class Perturbation(abc.ABC):
     """Abstract base class for graph perturbations.
@@ -39,4 +40,8 @@ class Perturbation(abc.ABC):
             describes what changed (e.g., removed_nodes, added_edges, etc.).
             The exact keys depend on the perturbation type.
         """
+        pass
+
+    @abc.abstractmethod
+    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[Any], chain: PerturbationChain) -> tuple[nx.Graph[Any], dict[str, Any]]:
         pass
