@@ -1,6 +1,7 @@
 import abc
 import networkx as nx
 
+from typing import Any
 
 class MotifGenerator(abc.ABC):
     """Abstract base class for generating graph motifs.
@@ -10,7 +11,7 @@ class MotifGenerator(abc.ABC):
     """
 
     @abc.abstractmethod
-    def generate_motif(self, start: int, id: int = 0, **kwargs) -> nx.Graph:
+    def generate_motif(self, start: int, id: int = 0, **kwargs) -> nx.Graph[Any]:
         """Generate a motif.
 
         Args:

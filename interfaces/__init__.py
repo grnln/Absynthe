@@ -9,3 +9,4 @@ from .exceptions import GraphSourceExhausted
 from .perturbation_chain_pipeline import PerturbationChainPipeline
 from .perturbation_chain import AppliedPerturbation, PerturbationChain
 from .perturbation_walk import PerturbationWalk
+from .applied_perturbation import AppliedPerturbation

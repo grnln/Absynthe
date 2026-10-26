@@ -102,7 +102,6 @@ class PerturbationPipeline:
         """
         original_result = compute_labels(graph, self.labeling_functions)
         results = []
-        chain_results = []
 
         for perturbation, desired_count in self.perturbations:
             result = self.apply_single_perturbation(graph, perturbation, desired_count, original_result)
@@ -110,11 +109,4 @@ class PerturbationPipeline:
             if result is not None:
                 results.append(result)
 
-        if len(chain_results) > 0:
-            print('')
-            print('--------------------------')
-            print('Perturbation chain results')
-            print('--------------------------')
-            print(chain_results)
-            print('')
         return results

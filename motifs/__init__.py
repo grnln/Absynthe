@@ -1,3 +1,5 @@
+from interfaces import MotifGenerator
+
 from .cycle_motif_generator import CycleMotifGenerator
 from .house_motif_generator import HouseMotifGenerator
 from .chain_motif_generator import ChainMotifGenerator

@@ -4,7 +4,6 @@ import networkx as nx
 
 from .perturbation_hint import PerturbationHint
 from .perturbation_walk import PerturbationWalk
-from .perturbation_chain import PerturbationChain
 
 class Perturbation(abc.ABC):
     """Abstract base class for graph perturbations.
@@ -43,5 +42,5 @@ class Perturbation(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[Any], chain: PerturbationChain) -> tuple[nx.Graph[Any], dict[str, Any]]:
+    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[Any], chain: Any) -> Any:
         pass

@@ -1,7 +1,8 @@
 import networkx as nx
+
+from typing import Any
 from interfaces import MotifGenerator
 from motifs.utils import assign_labels_to_motif
-
 
 class CycleMotifGenerator(MotifGenerator):
     """Generator for cycle motifs.
@@ -9,7 +10,7 @@ class CycleMotifGenerator(MotifGenerator):
     Generates a cycle graph with len_cycle nodes, starting from index start.
     """
 
-    def generate_motif(self, start: int, len_cycle: int, id: int = 0) -> nx.Graph:
+    def generate_motif(self, start: int, len_cycle: int, id: int = 0) -> nx.Graph[Any]:
         """Generate a cycle motif with len_cycle nodes starting from index start.
 
         Args:

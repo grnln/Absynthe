@@ -1,7 +1,7 @@
 import networkx as nx
 from interfaces import GraphGenerator
 from motifs import motif_generators, motif_param_names
-from typing import List
+from typing import Any
 from collections import defaultdict
 from utils.graph_utils import add_vertices, add_random_edges
 from utils.rng import get_rng
@@ -17,11 +17,11 @@ class MotifComposite(GraphGenerator):
     vertices and edges.
     """
 
-    def __init__(self, motifs: List[List] = None):
+    def __init__(self, motifs: list[list[Any]] | None = None):
         self.motifs = motifs or []
         self.generators = motif_generators
 
-    def generate_graph(self, num_extra_vertices: int = 0, num_extra_edges: int = 0, **kwargs) -> nx.Graph:
+    def generate_graph(self, num_extra_vertices: int = 0, num_extra_edges: int = 0, **kwargs: Any) -> nx.Graph[Any]:
         """Generate a composite graph by combining motifs from the list.
 
         Args:

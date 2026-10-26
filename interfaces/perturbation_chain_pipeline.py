@@ -21,15 +21,15 @@ class PerturbationChainPipeline(abc.ABC):
     ) -> None:
         self.graph = graph;
         self.max_length = max_length
-        self.perturbations = perturbations
+        self.perturbations = [perturbation for perturbation, _ in perturbations]
         self.labeling_functions = labeling_functions
+        self.walks = {perturbation: walk for perturbation, walk in perturbations}
 
     def find(self) -> list[PerturbationChain]:
         out: list[PerturbationChain] = []
 
         for length in range(2, (self.max_length + 1)):
             out += self._find_chains(length)
-
         return out
 
     @abstractmethod
@@ -37,36 +37,37 @@ class PerturbationChainPipeline(abc.ABC):
         pass
 
     @abstractmethod
-    def _find_chain(self, chain: PerturbationChain, chain_length: int, chains: list[PerturbationChain]) -> None:
+    def _find_chain(self, chain: PerturbationChain, chain_length: int, chains: list[PerturbationChain]) -> bool:
         pass
 
     def _test_perturbation(
         self,
         perturbation: Perturbation,
         walk: PerturbationWalk[Any],
+        chain: PerturbationChain,
         graph: nx.Graph[Any],
         desired_result: bool = False
-    ) -> tuple[bool, nx.Graph[Any], dict[str, Any]]:
+    ) -> AppliedPerturbation | None:
+        out = None
         result = False
-
-        original_result = compute_labels(graph, self.labeling_functions)
-
-        candidate_graph = graph
-        candidate_result = original_result
-
-        changes: dict[str, Any] = dict()
         changed_nodes: dict[int, tuple[Any, Any]] | None = None
 
-        while result is False:
-            
+        new_walk = walk
+        original_result = compute_labels(graph, self.labeling_functions)
+        candidate_result = original_result
 
-            # Always apply to the original graph
-            candidate_graph, changes = perturbation.apply(
-                graph, hint = original_result.hint
+        while result is False:
+            new_walk = new_walk.next(graph, chain)
+
+            if new_walk is None:
+                break
+            
+            out = perturbation.apply_by_walk(
+                graph, new_walk, chain
             )
 
             # Check for label changes
-            candidate_result = compute_labels(candidate_graph, self.labeling_functions)
+            candidate_result = compute_labels(out.graph, self.labeling_functions)
             candidate_labels = candidate_result.node_labels
             changed_nodes = {
                 node: (original_result.node_labels.get(node), candidate_labels[node])
@@ -78,20 +79,71 @@ class PerturbationChainPipeline(abc.ABC):
             else:
                 result = not desired_result
 
-        return (result, candidate_graph, changes)
+        if not result:
+            out = None
+        return out
+
+    def _test_applied_perturbation(
+        self,
+        perturbation: AppliedPerturbation,
+        chain: PerturbationChain,
+        graph: nx.Graph[Any],
+        desired_result: bool = False
+    ) -> AppliedPerturbation | None:
+        result = False
+        changed_nodes: dict[int, tuple[Any, Any]] | None = None
+
+        original_result = compute_labels(graph, self.labeling_functions)
+        candidate_result = original_result
+
+        out = perturbation.perturbation.apply_by_walk(
+            graph, perturbation.walk, chain
+        )
+
+        # Check for label changes
+        candidate_result = compute_labels(out.graph, self.labeling_functions)
+        candidate_labels = candidate_result.node_labels
+        changed_nodes = {
+            node: (original_result.node_labels.get(node), candidate_labels[node])
+            for node in candidate_labels if candidate_labels[node] != original_result.node_labels.get(node)
+        }
+
+        if changed_nodes:
+            result = desired_result
+        else:
+            result = not desired_result
+
+        if not result:
+            out = None
+        return out
+
+    def _reset_walks(self, exceptions: set[Perturbation] = set()) -> None:
+        for perturbation in [p for p in self.perturbations if p not in exceptions]:
+            self.walks[perturbation].reset()
 
     def _find_chains(self, chain_length: int) -> list[PerturbationChain]:
         chains: list[PerturbationChain] = []
     
-        for perturbation, walk in self.perturbations:
-            result, candidate_graph, changes = self._test_perturbation(perturbation, walk, self.graph)
+        for perturbation in self.perturbations:
+            walk: PerturbationWalk[Any] | None = self.walks[perturbation]
 
-            if result is False:
-                continue
+            while walk is not None:
+                result = self._test_perturbation(perturbation, walk, PerturbationChain([]), self.graph)
 
-            self._find_chain(
-                PerturbationChain([AppliedPerturbation(perturbation, walk, candidate_graph, changes)]),
-                chain_length,
-                chains
-            )
+                if result is None:
+                    walk = walk.next(self.graph, PerturbationChain([]))
+                    continue
+
+                walk = result.walk
+                self.walks[perturbation] = result.walk
+
+                while self._find_chain(
+                    PerturbationChain([result]),
+                    chain_length,
+                    chains
+                ):
+                    pass
+
+                self._reset_walks(exceptions = {perturbation})
+                walk.soft_reset()
         return chains

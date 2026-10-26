@@ -1,11 +1,10 @@
-from typing import Any, Dict, List
-
 import networkx as nx
 
+from typing import Any
 
 def assign_labels_to_motif(
-    graph: nx.Graph, motif: nx.Graph, motif_name: str,
-) -> List[Dict[str, Any]]:
+    graph: nx.Graph[Any], motif: nx.Graph[Any], motif_name: str,
+) -> list[dict[str, Any]]:
     """Detect monomorphic subgraphs matching the motif and label nodes.
 
     Additional edges not present in the motif are allowed (subgraph
@@ -27,11 +26,10 @@ def assign_labels_to_motif(
         edge_match=None
     )
 
-    seen_node_sets = set()
-    instances: List[Dict[str, Any]] = []
+    seen_node_sets: set[frozenset[Any]] = set()
+    instances: list[dict[str, Any]] = []
 
     for subgraph in matcher.subgraph_monomorphisms_iter():
-
         node_set = frozenset(subgraph.keys())
 
         # Avoid labeling the same group multiple times (automorphisms)

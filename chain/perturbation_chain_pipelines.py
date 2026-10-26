@@ -2,7 +2,7 @@ import networkx as nx
 
 from typing import Any
 
-from interfaces import Perturbation, PerturbationWalk, PerturbationChainPipeline, AppliedPerturbation, PerturbationChain, LabelingFunction
+from interfaces import Perturbation, PerturbationWalk, PerturbationChainPipeline, PerturbationChain, LabelingFunction
 
 class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
     def __init__(
@@ -21,15 +21,18 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
         subchain_length: int
     ) -> bool:
         out = True
-        
+
         if len(subchain) >= subchain_length:
             result = None
             acc_graph = self.graph
 
             for perturbation in subchain:
-                result, acc_graph, _ = self._test_perturbation(perturbation.perturbation, perturbation.walk, acc_graph)
+                result = self._test_applied_perturbation(perturbation, subchain, acc_graph)
+
+                if result is not None:
+                    acc_graph = result.graph
     
-            out = result is True
+            out = result is not None
         else:
             for perturbation in [p for p in chain if p not in subchain]:
                 out = self._test_subchain(
@@ -47,25 +50,38 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
         chain: PerturbationChain,
         chain_length: int,
         chains: list[PerturbationChain]
-    ) -> None:
+    ) -> bool:
+        out = True
+        
         if len(chain) >= chain_length:
             result = None
             acc_graph = self.graph
 
             for perturbation in chain:
-                result, acc_graph, _ = self._test_perturbation(perturbation.perturbation, perturbation.walk, acc_graph)
+                result  = self._test_applied_perturbation(perturbation, chain, acc_graph)
+
+                if result is not None:
+                    acc_graph = result.graph
     
-            if result is True:
+            if result is None:
                 chains.append(chain)
         else:
-            for perturbation, walk in self.perturbations:
+            for perturbation in self.perturbations:
                 discard = False
-                result, candidate_graph, changes = self._test_perturbation(perturbation, walk, self.graph)
+                walk = self.walks[perturbation]
 
-                if result is False:
-                    continue
+                result = self._test_perturbation(perturbation, walk, chain, self.graph)
 
-                candidate_chain = chain + PerturbationChain([AppliedPerturbation(perturbation, walk, candidate_graph, changes)])
+                if result is None:
+                    new_walk = walk.next(self.graph, chain)
+
+                    if new_walk is not None:
+                        self.walks[perturbation] = new_walk
+                        continue
+                    else:
+                        return False
+
+                candidate_chain = chain + PerturbationChain([result])
 
                 # Discard the perturbation if one of the possible sub-chains involving it changes labels
                 for subchain_length in range(2, min(len(candidate_chain), chain_length)):
@@ -80,8 +96,11 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
                 if discard is True:
                     continue;
 
-                self._find_chain(
-                    chain + PerturbationChain([AppliedPerturbation(perturbation, walk, candidate_graph, changes)]),
+                self.walks[perturbation] = result.walk
+
+                out = self._find_chain(
+                    candidate_chain,
                     chain_length,
                     chains
                 )
+        return out

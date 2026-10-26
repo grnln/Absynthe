@@ -1,12 +1,29 @@
 import abc
+import networkx as nx
 
+from typing import Any
 from abc import abstractmethod
-from .perturbation_chain import PerturbationChain
 
 class PerturbationWalk[T](abc.ABC):
     def __init__(self) -> None:
         pass
 
     @abstractmethod
-    def next(self, chain: PerturbationChain) -> T:
+    def next(self, graph: nx.Graph[Any], chain: Any) -> PerturbationWalk[T] | None:
+        pass
+
+    @abstractmethod
+    def current(self) -> T:
+        pass
+
+    @abstractmethod
+    def reset(self) -> None:
+        pass
+
+    @abstractmethod
+    def soft_reset(self) -> None:
+        pass
+
+    @abstractmethod
+    def has_next(self, graph: nx.Graph[Any]) -> bool:
         pass

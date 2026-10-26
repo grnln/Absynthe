@@ -1,7 +1,7 @@
 import random
 from typing import Optional, Dict, Any, Tuple, List
 import networkx as nx
-from interfaces import Perturbation, PerturbationHint
+from interfaces import Perturbation, PerturbationHint, AppliedPerturbation
 from .perturbation_strategies import STRATEGY_MAP
 from utils.rng import get_rng
 
@@ -158,15 +158,22 @@ class RemoveNodesPerturbation(Perturbation):
         removed_info = self._get_removed_info(graph, removed)
         return new_graph, {"removed_nodes": removed_info}
 
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[Any], chain: PerturbationChain) -> tuple[nx.Graph[Any], dict[str, Any]]:
+    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[Any], chain: PerturbationChain) -> AppliedPerturbation:
         nodes = list[Any]()
 
         for _ in range(self.num_nodes):
-            nodes.append(walk.next(chain))
+            node = walk.current()
+            nodes.append(node)
 
         working_graph = graph.copy()
         working_graph.remove_nodes_from(nodes)
-        return (working_graph, {"removed_nodes": self._get_removed_info(graph, nodes)})
+
+        return AppliedPerturbation(
+            self,
+            walk,
+            working_graph,
+            {"removed_nodes": self._get_removed_info(graph, nodes)}
+        )
 
 class RemoveEdgesPerturbation(Perturbation):
     """Remove edges from a graph with a given probability."""
@@ -205,18 +212,24 @@ class RemoveEdgesPerturbation(Perturbation):
         removed_info = self._get_removed_info(graph, removed)
         return new_graph, {"removed_edges": removed_info}
 
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[tuple[Any, Any]], chain: PerturbationChain) -> tuple[nx.Graph[Any], dict[str, Any]]:
+    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[tuple[Any, Any]], chain: PerturbationChain) -> AppliedPerturbation:
         edges = set[tuple[Any, Any]]()
 
-        for _ in range(self.num_edges):
-            edges.add(walk.next(chain))
+        for _ in range(self.num_edges):            
+            edge = walk.current()
+            edges.add(edge)
 
         working_graph = graph.copy()
 
         for u, v in edges:
             working_graph.remove_edge(u, v)
         
-        return (working_graph, {"removed_nodes": self._get_removed_info(graph, edges)})
+        return AppliedPerturbation(
+            self,
+            walk,
+            working_graph,
+            {"removed_edges": self._get_removed_info(graph, edges)}
+        )
 
 class AddEdgesPerturbation(Perturbation):
     """Add random edges to a graph."""
@@ -246,21 +259,27 @@ class AddEdgesPerturbation(Perturbation):
         )
         return new_graph, {"added_edges": self._get_added_info(graph, new_graph)}
 
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[tuple[Any, Any]], chain: PerturbationChain) -> tuple[nx.Graph[Any], dict[str, Any]]:
+    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[tuple[Any, Any]], chain: PerturbationChain) -> AppliedPerturbation:
         edges = set[tuple[Any, Any]]()
 
         if self.add_num is None:
             raise ValueError("The number of edges to add must be provided to apply the perturbation based on a walk.")
 
         for _ in range(self.add_num):
-            edges.add(walk.next(chain))
+            edge = walk.current()
+            edges.add(edge)
 
         working_graph = graph.copy()
 
         for u, v in edges:
             working_graph.add_edge(u, v)
-            
-        return (working_graph, {"added_edges": self._get_added_info(graph, working_graph)})
+
+        return AppliedPerturbation(
+            self,
+            walk,
+            working_graph,
+            {"added_edges": self._get_added_info(graph, working_graph)}
+        )
 
 class EdgePerturbation(Perturbation):
     """Combined edge perturbation: remove and add edges simultaneously."""
@@ -306,14 +325,15 @@ class EdgePerturbation(Perturbation):
             "added_edges": added_edges
         }
 
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[tuple[Any, Any]], chain: PerturbationChain) -> tuple[nx.Graph[Any], dict[str, Any]]:
+    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[tuple[Any, Any]], chain: PerturbationChain) -> AppliedPerturbation:
             edges = set[tuple[tuple[Any, Any], tuple[Any, Any]]]()
     
             if self.add_num is None:
                 raise ValueError("The number of edges must be provided to apply the perturbation based on a walk.")
     
             for _ in range(self.add_num):
-                edges.add(walk.next(chain))
+                edge = walk.current()
+                edges.add(edge)
 
             working_graph = graph.copy()
     
@@ -325,7 +345,12 @@ class EdgePerturbation(Perturbation):
                     working_graph.add_edge(u, v)
 
             removed_edges, added_edges = self._get_change_info(graph, working_graph)
-            return working_graph, {
-                "removed_edges": removed_edges,
-                "added_edges": added_edges
-            }
+            return AppliedPerturbation(
+                self,
+                walk,
+                working_graph,
+                {
+                    "removed_edges": removed_edges,
+                    "added_edges": added_edges
+                }
+            )
