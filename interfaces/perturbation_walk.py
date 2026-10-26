@@ -23,7 +23,3 @@ class PerturbationWalk[T](abc.ABC):
     @abstractmethod
     def soft_reset(self) -> None:
         pass
-
-    @abstractmethod
-    def has_next(self, graph: nx.Graph[Any]) -> bool:
-        pass

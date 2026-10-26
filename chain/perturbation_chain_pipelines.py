@@ -10,9 +10,10 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
         graph: nx.Graph[Any],
         perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]],
         labeling_functions: list[LabelingFunction],
-        max_length: int = 4
+        max_length: int = 4,
+        max_iterations: int | None = None
     ) -> None:
-        super().__init__(graph, perturbations, labeling_functions, max_length)
+        super().__init__(graph, perturbations, labeling_functions, max_length, max_iterations)
 
     def _test_subchain(
         self,

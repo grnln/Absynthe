@@ -17,10 +17,12 @@ class PerturbationChainPipeline(abc.ABC):
         graph: nx.Graph[Any],
         perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]],
         labeling_functions: list[LabelingFunction],
-        max_length: int
+        max_length: int,
+        max_iterations: int | None
     ) -> None:
         self.graph = graph;
         self.max_length = max_length
+        self.max_iterations = max_iterations
         self.perturbations = [perturbation for perturbation, _ in perturbations]
         self.labeling_functions = labeling_functions
         self.walks = {perturbation: walk for perturbation, walk in perturbations}
@@ -125,6 +127,7 @@ class PerturbationChainPipeline(abc.ABC):
         chains: list[PerturbationChain] = []
     
         for perturbation in self.perturbations:
+            num_iterations = 0
             walk: PerturbationWalk[Any] | None = self.walks[perturbation]
 
             while walk is not None:
@@ -141,8 +144,8 @@ class PerturbationChainPipeline(abc.ABC):
                     PerturbationChain([result]),
                     chain_length,
                     chains
-                ):
-                    pass
+                ) and (self.max_iterations is None or num_iterations < self.max_iterations):
+                    num_iterations += 1
 
                 self._reset_walks(exceptions = {perturbation})
                 walk.soft_reset()

@@ -33,9 +33,6 @@ class NaturalOrderNodePerturbationWalk(PerturbationWalk[Any]):
         if len(self.traversed_nodes) > 0:
             self.traversed_nodes = [self.traversed_nodes[-1]]
 
-    def has_next(self, graph: nx.Graph[Any]) -> bool:
-        return (len(self.traversed_nodes) < len(list(graph.nodes)))
-        
 class NaturalOrderEdgePerturbationWalk(PerturbationWalk[Any]):
     def __init__(self) -> None:
         self.traversed_edges: list[Any] = []
@@ -65,6 +62,3 @@ class NaturalOrderEdgePerturbationWalk(PerturbationWalk[Any]):
     def soft_reset(self) -> None:
         if len(self.traversed_edges) > 0:
             self.traversed_edges = [self.traversed_edges[-1]]
-
-    def has_next(self, graph: nx.Graph[Any]) -> bool:
-        return (len(self.traversed_edges) < len(list(graph.edges)))
