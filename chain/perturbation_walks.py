@@ -69,17 +69,20 @@ node_perturbation_types: set[str] = {
     'removed_nodes'
 }
 
-def node_euclidean_distance(a: Any, b: Any) -> float:
+def node_graph_distance(a: Any, b: Any, graph: nx.Graph[Any]) -> float:
+    return nx.shortest_path_length(graph, source = a, target = b) # type: ignore
+
+def node_euclidean_distance(a: Any, b: Any, graph: nx.Graph[Any]) -> float:
     return abs(float(b) - float(a))
 
 class ProximityNodePerturbationWalk(PerturbationWalk[Any]):
-    def __init__(self, distance_func: Callable[[Any, Any], float] = node_euclidean_distance) -> None:
+    def __init__(self, graph: nx.Graph[Any], distance_func: Callable[[Any, Any, nx.Graph[Any]], float] = node_graph_distance) -> None:
+        self.graph = graph.copy()
         self.traversed_nodes: list[Any] = []
         self.distance_func = distance_func
 
     def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[Any] | None:
-        last_perturbation = None
-        last_perturbation_type = ''
+        perturbed_nodes_raw: list[dict[str, Any]] = []
         
         new_walk = deepcopy(self)
         candidate_nodes = [n for n in list(graph.nodes) if n not in self.traversed_nodes]
@@ -87,23 +90,21 @@ class ProximityNodePerturbationWalk(PerturbationWalk[Any]):
         for perturbation in reversed(chain):
             for perturbation_type in node_perturbation_types:
                 if perturbation_type in perturbation.changes:
-                    last_perturbation_type = perturbation_type
-                    last_perturbation = perturbation
-                    break
+                    perturbed_nodes_raw.extend(perturbation.changes[perturbation_type])
 
-        if last_perturbation is None:
+        if len(perturbed_nodes_raw) == 0:
             if len(candidate_nodes) > 0:
                 new_walk.traversed_nodes.append(candidate_nodes[0])
                 return new_walk
             else:
                 return None
 
-        last_affected_nodes = [affected_node['id'] for affected_node in last_perturbation.changes[last_perturbation_type]]
+        perturbed_nodes = [perturbed_node['id'] for perturbed_node in perturbed_nodes_raw]
         
         candidate_nodes.sort(
             key = lambda candidate_node:
-                sum([self.distance_func(candidate_node, affected_node) for affected_node in last_affected_nodes])
-                / len(last_affected_nodes)
+                sum([self.distance_func(candidate_node, perturbed_node, self.graph) for perturbed_node in perturbed_nodes])
+                / len(perturbed_nodes)
         )
         
         if len(candidate_nodes) > 0:
@@ -127,7 +128,10 @@ edge_perturbation_types: set[str] = {
     'removed_edges'
 }
 
-def edge_euclidean_distance(a: tuple[Any, Any], b: tuple[Any, Any]) -> float:
+def edge_graph_distance(a: tuple[Any, Any], b: tuple[Any, Any], graph: nx.Graph[Any]) -> float:
+    return min([node_graph_distance(u, v, graph) for v in b for u in a])
+
+def edge_euclidean_distance(a: tuple[Any, Any], b: tuple[Any, Any], graph: nx.Graph[Any]) -> float:
     a_u = float(a[0])
     a_v = float(a[1])
 
@@ -136,37 +140,35 @@ def edge_euclidean_distance(a: tuple[Any, Any], b: tuple[Any, Any]) -> float:
     return sqrt(((b_u - a_u) * (b_u - a_u)) + ((b_v - a_v) * (b_v - a_v)))
 
 class ProximityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
-    def __init__(self, distance_func: Callable[[tuple[Any, Any], tuple[Any, Any]], float] = edge_euclidean_distance) -> None:
+    def __init__(self, graph: nx.Graph[Any], distance_func: Callable[[tuple[Any, Any], tuple[Any, Any], nx.Graph[Any]], float] = edge_graph_distance) -> None:
+        self.graph = graph.copy()
         self.traversed_edges: list[tuple[Any, Any]] = []
         self.distance_func = distance_func
 
     def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[tuple[Any, Any]] | None:
-        last_perturbation = None
-        last_perturbation_type = ''
-        
+        perturbed_edges_raw: list[dict[str, Any]] = []
+
         new_walk = deepcopy(self)
         candidate_edges = [e for e in list(graph.edges) if e not in self.traversed_edges]
         
         for perturbation in reversed(chain):
             for perturbation_type in edge_perturbation_types:
                 if perturbation_type in perturbation.changes:
-                    last_perturbation_type = perturbation_type
-                    last_perturbation = perturbation
-                    break
-
-        if last_perturbation is None:
+                    perturbed_edges_raw.extend(perturbation.changes[perturbation_type])
+                    
+        if len(perturbed_edges_raw) == 0:
             if len(candidate_edges) > 0:
                 new_walk.traversed_edges.append(candidate_edges[0])
                 return new_walk
             else:
                 return None
 
-        last_affected_edges = [(affected_edge['u'], affected_edge['v']) for affected_edge in last_perturbation.changes[last_perturbation_type]]
+        perturbed_edges = [(perturbed_edge['u'], perturbed_edge['v']) for perturbed_edge in perturbed_edges_raw]
         
         candidate_edges.sort(
             key = lambda candidate_edge:
-                sum([self.distance_func(candidate_edge, affected_edge) for affected_edge in last_affected_edges])
-                / len(last_affected_edges)
+                sum([self.distance_func(candidate_edge, perturbed_edge, self.graph) for perturbed_edge in perturbed_edges])
+                / len(perturbed_edges)
         )
         
         if len(candidate_edges) > 0:

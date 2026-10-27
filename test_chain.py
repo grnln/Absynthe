@@ -40,7 +40,7 @@ gen = MotifComposite(motifs = [["cycle", 4]])
 graph = gen.generate_graph()
 labeling = TestLabelingFunction()
 
-perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), ProximityEdgePerturbationWalk())]
+perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), ProximityEdgePerturbationWalk(graph))]
 pipeline = BruteForcePerturbationChainPipeline(
     graph,
     perturbations=perturbations,
