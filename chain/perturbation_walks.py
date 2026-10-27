@@ -10,46 +10,54 @@ class NaturalOrderNodePerturbationWalk(PerturbationWalk[Any]):
         self.traversed_nodes: list[Any] = []
 
     def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[Any] | None:
-        index = 0
-        node_list = sorted(list(graph.nodes))
-        
-        if len(self.traversed_nodes) > 0:
-            last_node = self.traversed_nodes[-1]
-            index = node_list.index(last_node) + 1
+        candidate_nodes = sorted([n for n in list(graph.nodes) if n not in self.traversed_nodes])
 
-        if (index >= len(node_list)):
+        if len(candidate_nodes) > 0:
+            new_walk = deepcopy(self)
+            new_walk.traversed_nodes.append(candidate_nodes[0])
+            return new_walk
+        else:
             return None
-
-        node = node_list[index]
-        new_walk = deepcopy(self)
-        new_walk.traversed_nodes.append(node)
-        return new_walk
-
+ 
     def current(self) -> Any:
         return self.traversed_nodes[-1]
+
+    def reset(self) -> None:
+        self.traversed_nodes.clear()
+
+    def soft_reset(self) -> None:
+        if len(self.traversed_nodes) > 1:
+            node = self.traversed_nodes[-1]
+
+            self.traversed_nodes.clear()
+            self.traversed_nodes.append(node)
 
 class NaturalOrderEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
     def __init__(self) -> None:
         self.traversed_edges: list[tuple[Any, Any]] = []
 
     def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[tuple[Any, Any]] | None:
-        index = 0
-        edge_list = sorted(list(graph.edges), key = lambda x: x[0])
+        candidate_edges = sorted([e for e in list(graph.edges) if e not in self.traversed_edges], key = lambda x: x[0])
 
-        if len(self.traversed_edges) > 0:
-            last_edge = self.traversed_edges[-1]
-            index = edge_list.index(last_edge) + 1
-
-        if (index >= len(edge_list)):
+        if len(candidate_edges) > 0:
+            new_walk = deepcopy(self)
+            new_walk.traversed_edges.append(candidate_edges[0])
+            return new_walk
+        else:
             return None
-        
-        edge = edge_list[index]
-        new_walk = deepcopy(self)
-        new_walk.traversed_edges.append(edge)
-        return new_walk
-
+            
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
+
+    def reset(self) -> None:
+        self.traversed_edges.clear()
+
+    def soft_reset(self) -> None:
+        if len(self.traversed_edges) > 1:
+            edge = self.traversed_edges[-1]
+            
+            self.traversed_edges.clear()
+            self.traversed_edges.append(edge)
 
 node_perturbation_types: set[str] = {
     'removed_nodes'
@@ -101,7 +109,17 @@ class ProximityNodePerturbationWalk(PerturbationWalk[Any]):
 
     def current(self) -> tuple[Any, Any]:
         return self.traversed_nodes[-1]
-    
+
+    def reset(self) -> None:
+        self.traversed_nodes.clear()
+
+    def soft_reset(self) -> None:
+        if len(self.traversed_nodes) > 1:
+            node = self.traversed_nodes[-1]
+            
+            self.traversed_nodes.clear()
+            self.traversed_nodes.append(node)
+
 edge_perturbation_types: set[str] = {
     'added_edges',
     'removed_edges'
@@ -159,6 +177,17 @@ class ProximityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
 
+    def reset(self) -> None:
+        self.traversed_edges.clear()
+
+
+    def soft_reset(self) -> None:
+        if len(self.traversed_edges) > 1:
+            edge = self.traversed_edges[-1]
+            
+            self.traversed_edges.clear()
+            self.traversed_edges.append(edge)
+
 class CentralityNodePerturbationWalk(PerturbationWalk[Any]):
     def __init__(self, graph: nx.Graph[Any]):
         self.traversed_nodes: list[Any] = []
@@ -184,6 +213,16 @@ class CentralityNodePerturbationWalk(PerturbationWalk[Any]):
     def current(self) -> Any:
         return self.traversed_nodes[-1]
 
+    def reset(self) -> None:
+        self.traversed_nodes.clear()
+
+    def soft_reset(self) -> None:
+        if len(self.traversed_nodes) > 1:
+            node = self.traversed_nodes[-1]
+            
+            self.traversed_nodes.clear()
+            self.traversed_nodes.append(node)
+
 class CentralityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
     def __init__(self, graph: nx.Graph[Any]):
         self.traversed_edges: list[tuple[Any, Any]] = []
@@ -208,3 +247,14 @@ class CentralityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
 
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
+
+    def reset(self) -> None:
+        self.traversed_edges.clear()
+
+
+    def soft_reset(self) -> None:
+        if len(self.traversed_edges) > 1:
+            edge = self.traversed_edges[-1]
+            
+            self.traversed_edges.clear()
+            self.traversed_edges.append(edge)

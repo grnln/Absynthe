@@ -2,6 +2,7 @@ import abc
 import networkx as nx
 
 from typing import Any
+from copy import deepcopy
 from abc import abstractmethod
 from graph.labeling_helpers import compute_labels
 
@@ -34,6 +35,9 @@ class PerturbationChainPipeline(abc.ABC):
 
         for length in range(2, (self.max_length + 1)):
             out += self._find_chains(length)
+
+            for perturbation in self.walks:
+                self.walks[perturbation].reset()
         return out
 
     @abstractmethod
@@ -41,7 +45,7 @@ class PerturbationChainPipeline(abc.ABC):
         pass
 
     @abstractmethod
-    def _find_chain(self, chain: PerturbationChain, chain_length: int, chains: list[PerturbationChain], num_chains: int | None) -> bool:
+    def _find_chain(self, graph: nx.Graph[Any], chain: PerturbationChain, chain_length: int, chains: list[PerturbationChain], num_chains: int | None) -> None:
         pass
 
     def _test_perturbation(
@@ -128,26 +132,27 @@ class PerturbationChainPipeline(abc.ABC):
             num_iterations = 0
             walk: PerturbationWalk[Any] | None = self.walks[perturbation]
 
-            while walk is not None:
+            while walk is not None and (
+                self.max_iterations is None or num_iterations < self.max_iterations
+            ) and (
+                self.num_chains is None or len(chains) < self.num_chains
+            ):
                 result = self._test_perturbation(perturbation, walk, PerturbationChain([]), self.graph)
 
                 if result is None:
                     walk = walk.next(self.graph, PerturbationChain([]))
                     continue
 
-                walk = result.walk
-                self.walks[perturbation] = result.walk
-
-                while self._find_chain(
+                walk = deepcopy(result.walk)
+                result.walk.soft_reset()
+                self.walks[perturbation] = deepcopy(result.walk)
+                
+                self._find_chain(
+                    result.graph,
                     PerturbationChain([result]),
                     chain_length,
                     chains,
                     self.num_chains
-                ) and (
-                    self.max_iterations is None or num_iterations < self.max_iterations
-                ) and (
-                    self.num_chains is None or len(chains) < self.num_chains
-                ):
-                    num_iterations += 1
-
+                )
+                num_iterations += 1
         return chains

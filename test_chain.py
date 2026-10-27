@@ -4,9 +4,9 @@ from typing import Any
 from graph.composite_graph_generator import MotifComposite
 from interfaces import LabelingFunction, LabelingResult, PerturbationWalk, Perturbation
 
-from graph.perturbations import RemoveEdgesPerturbation
+from graph.perturbations import RemoveEdgesPerturbation, RemoveNodesPerturbation
 from chain.perturbation_chain_pipelines import BruteForcePerturbationChainPipeline
-from chain.perturbation_walks import NaturalOrderEdgePerturbationWalk, ProximityEdgePerturbationWalk, CentralityEdgePerturbationWalk
+from chain.perturbation_walks import NaturalOrderEdgePerturbationWalk, ProximityEdgePerturbationWalk, CentralityEdgePerturbationWalk, CentralityNodePerturbationWalk
 
 class TestLabelingFunction(LabelingFunction):
     def __init__(self):
@@ -36,16 +36,41 @@ class TestLabelingFunction(LabelingFunction):
             metadata={"instances": all_instances} if all_instances else {},
         )
 
-gen = MotifComposite(motifs = [["cycle", 4]])
-graph = gen.generate_graph()
-labeling = TestLabelingFunction()
+def test_square() -> None:
+    gen = MotifComposite(motifs = [["cycle", 4]])
+    graph = gen.generate_graph()
+    labeling = TestLabelingFunction()
 
-perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), CentralityEdgePerturbationWalk(graph))]
-pipeline = BruteForcePerturbationChainPipeline(
-    graph,
-    perturbations=perturbations,
-    labeling_functions=[labeling]
-)
-results = pipeline.find()
+    perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), CentralityEdgePerturbationWalk(graph))]
+    pipeline = BruteForcePerturbationChainPipeline(
+        graph,
+        perturbations=perturbations,
+        labeling_functions=[labeling]
+    )
+    results = pipeline.find()
 
-print(f'Found {len(results)} chains:\n{results}')
+    print('------------------------')
+    print('4-node square graph test')
+    print('------------------------')
+    print(f'Found {len(results)} chains:\n{results}\n')
+
+def test_k5() -> None:
+    graph = nx.complete_graph(5)
+    labeling = TestLabelingFunction()
+
+    perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(0.5), CentralityEdgePerturbationWalk(graph))]
+    pipeline = BruteForcePerturbationChainPipeline(
+        graph,
+        perturbations=perturbations,
+        labeling_functions=[labeling]
+    )
+    results = pipeline.find()
+
+    print('--------------')
+    print('K-5 graph test')
+    print('--------------')
+    print(f'Found {len(results)} chains:\n{results}\n')
+
+if __name__ == '__main__':
+    test_square()
+    test_k5()

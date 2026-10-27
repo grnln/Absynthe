@@ -1,6 +1,7 @@
 import networkx as nx
 
 from typing import Any
+from copy import deepcopy
 from interfaces import Perturbation, PerturbationWalk, PerturbationChainPipeline, PerturbationChain, LabelingFunction
 
 class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
@@ -11,9 +12,11 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
         labeling_functions: list[LabelingFunction],
         max_length: int = 4,
         max_iterations: int | None = None,
-        num_chains: int | None = None
+        num_chains: int | None = None,
+        ordered: bool = False
     ) -> None:
         super().__init__(graph, perturbations, labeling_functions, max_length, max_iterations, num_chains)
+        self.ordered = ordered
 
     def _test_subchain(
         self,
@@ -48,65 +51,47 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
 
     def _find_chain(
         self,
+        graph: nx.Graph[Any],
         chain: PerturbationChain,
         chain_length: int,
         chains: list[PerturbationChain],
         num_chains: int | None
-    ) -> bool:
+    ) -> None:
         if num_chains is not None and len(chains) >= num_chains:
-            return False
+            return
         
         if len(chain) >= chain_length:
             result = None
-            acc_graph = self.graph
 
-            for perturbation in chain:
-                result  = self._test_applied_perturbation(perturbation, chain, acc_graph)
-
-                if result is not None:
-                    acc_graph = result.graph
-    
-            if result is None:
+            if chain_length > 2:
+                for subchain_length in range(2, chain_length):
+                    for perturbation in chain:
+                        if not self._test_subchain(
+                            chain,
+                            PerturbationChain([perturbation]),
+                            subchain_length
+                        ):
+                            return
+            
+            if self.ordered or (not self.ordered and not any([chain == c for c in chains])):
                 chains.append(chain)
-                return True
-            else:
-                return False
         else:
             for perturbation in self.perturbations:
-                discard = False
-                walk = self.walks[perturbation]
-                result = self._test_perturbation(perturbation, walk, chain, self.graph)
+                walk: PerturbationWalk[Any] | None = self.walks[perturbation]
 
-                if result is None:
-                    new_walk = walk.next(self.graph, chain)
+                while walk is not None:
+                    result = self._test_perturbation(perturbation, walk, chain, graph, desired_result = len(chain) >= (chain_length - 1))
 
-                    if new_walk is not None:
-                        self.walks[perturbation] = new_walk
-                        continue
-                    else:
-                        return False
-
-                candidate_chain = chain + PerturbationChain([result])
-
-                if chain_length > 2:
-                    # Discard the perturbation if one of the possible sub-chains involving it changes labels
-                    for subchain_length in range(2, min(len(candidate_chain), chain_length)):
-                        for perturb in candidate_chain:
-                            if self._test_subchain(
-                                candidate_chain,
-                                PerturbationChain([perturb]),
-                                subchain_length
-                            ) is False:
-                                discard = True
-
-                    if discard is True:
+                    if result is None:
+                        walk = walk.next(self.graph, chain)
                         continue
 
-                self.walks[perturbation] = result.walk
-                self._find_chain(
-                    candidate_chain,
-                    chain_length,
-                    chains,
-                    num_chains
-                )
-            return True
+                    walk = deepcopy(result.walk)
+
+                    self._find_chain(
+                        result.graph,
+                        chain + PerturbationChain([result]),
+                        chain_length,
+                        chains,
+                        num_chains
+                    )

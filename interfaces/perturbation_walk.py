@@ -15,3 +15,11 @@ class PerturbationWalk[T](abc.ABC):
     @abstractmethod
     def current(self) -> T:
         pass
+
+    @abstractmethod
+    def reset(self) -> None:
+        pass
+
+    @abstractmethod
+    def soft_reset(self) -> None:
+        pass

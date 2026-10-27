@@ -18,7 +18,13 @@ class AppliedPerturbation:
         self.changes = changes
 
     def __str__(self) -> str:
-        return '\n' + str(self.perturbation) + str(self.changes)
+        return self.perturbation.__class__.__name__ + str(self.changes)
 
     def __repr__(self) -> str:
-        return '\n' + str(self.perturbation) + str(self.changes)
+        return str(self)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, AppliedPerturbation):
+            return False
+
+        return type(self.perturbation) == type(other.perturbation) and self.changes == other.changes
