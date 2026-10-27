@@ -10,9 +10,10 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
         perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]],
         labeling_functions: list[LabelingFunction],
         max_length: int = 4,
-        max_iterations: int | None = None
+        max_iterations: int | None = None,
+        num_chains: int | None = None
     ) -> None:
-        super().__init__(graph, perturbations, labeling_functions, max_length, max_iterations)
+        super().__init__(graph, perturbations, labeling_functions, max_length, max_iterations, num_chains)
 
     def _test_subchain(
         self,
@@ -49,8 +50,12 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
         self,
         chain: PerturbationChain,
         chain_length: int,
-        chains: list[PerturbationChain]
+        chains: list[PerturbationChain],
+        num_chains: int | None
     ) -> bool:
+        if num_chains is not None and len(chains) >= num_chains:
+            return False
+        
         if len(chain) >= chain_length:
             result = None
             acc_graph = self.graph
@@ -101,6 +106,7 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
                 self._find_chain(
                     candidate_chain,
                     chain_length,
-                    chains
+                    chains,
+                    num_chains
                 )
             return True

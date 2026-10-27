@@ -18,11 +18,13 @@ class PerturbationChainPipeline(abc.ABC):
         perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]],
         labeling_functions: list[LabelingFunction],
         max_length: int,
-        max_iterations: int | None
+        max_iterations: int | None,
+        num_chains: int | None
     ) -> None:
         self.graph = graph;
         self.max_length = max_length
         self.max_iterations = max_iterations
+        self.num_chains = num_chains
         self.perturbations = [perturbation for perturbation, _ in perturbations]
         self.labeling_functions = labeling_functions
         self.walks = {perturbation: walk for perturbation, walk in perturbations}
@@ -39,7 +41,7 @@ class PerturbationChainPipeline(abc.ABC):
         pass
 
     @abstractmethod
-    def _find_chain(self, chain: PerturbationChain, chain_length: int, chains: list[PerturbationChain]) -> bool:
+    def _find_chain(self, chain: PerturbationChain, chain_length: int, chains: list[PerturbationChain], num_chains: int | None) -> bool:
         pass
 
     def _test_perturbation(
@@ -139,8 +141,13 @@ class PerturbationChainPipeline(abc.ABC):
                 while self._find_chain(
                     PerturbationChain([result]),
                     chain_length,
-                    chains
-                ) and (self.max_iterations is None or num_iterations < self.max_iterations):
+                    chains,
+                    self.num_chains
+                ) and (
+                    self.max_iterations is None or num_iterations < self.max_iterations
+                ) and (
+                    self.num_chains is None or len(chains) < self.num_chains
+                ):
                     num_iterations += 1
 
         return chains
