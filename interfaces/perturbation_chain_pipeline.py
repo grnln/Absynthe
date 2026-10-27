@@ -119,10 +119,6 @@ class PerturbationChainPipeline(abc.ABC):
             out = None
         return out
 
-    def _reset_walks(self, exceptions: set[Perturbation] = set()) -> None:
-        for perturbation in [p for p in self.perturbations if p not in exceptions]:
-            self.walks[perturbation].reset()
-
     def _find_chains(self, chain_length: int) -> list[PerturbationChain]:
         chains: list[PerturbationChain] = []
     
