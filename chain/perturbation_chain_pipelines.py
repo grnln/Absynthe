@@ -1,7 +1,6 @@
 import networkx as nx
 
 from typing import Any
-
 from interfaces import Perturbation, PerturbationWalk, PerturbationChainPipeline, PerturbationChain, LabelingFunction
 
 class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
@@ -52,8 +51,6 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
         chain_length: int,
         chains: list[PerturbationChain]
     ) -> bool:
-        out = True
-        
         if len(chain) >= chain_length:
             result = None
             acc_graph = self.graph
@@ -66,11 +63,13 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
     
             if result is None:
                 chains.append(chain)
+                return True
+            else:
+                return False
         else:
             for perturbation in self.perturbations:
                 discard = False
                 walk = self.walks[perturbation]
-
                 result = self._test_perturbation(perturbation, walk, chain, self.graph)
 
                 if result is None:
@@ -84,24 +83,24 @@ class BruteForcePerturbationChainPipeline(PerturbationChainPipeline):
 
                 candidate_chain = chain + PerturbationChain([result])
 
-                # Discard the perturbation if one of the possible sub-chains involving it changes labels
-                for subchain_length in range(2, min(len(candidate_chain), chain_length)):
-                    for perturb in candidate_chain:
-                        if self._test_subchain(
-                            candidate_chain,
-                            PerturbationChain([perturb]),
-                            subchain_length,
-                        ) is False:
-                            discard = True
+                if chain_length > 2:
+                    # Discard the perturbation if one of the possible sub-chains involving it changes labels
+                    for subchain_length in range(2, min(len(candidate_chain), chain_length)):
+                        for perturb in candidate_chain:
+                            if self._test_subchain(
+                                candidate_chain,
+                                PerturbationChain([perturb]),
+                                subchain_length
+                            ) is False:
+                                discard = True
 
-                if discard is True:
-                    continue;
+                    if discard is True:
+                        continue
 
                 self.walks[perturbation] = result.walk
-
-                out = self._find_chain(
+                self._find_chain(
                     candidate_chain,
                     chain_length,
                     chains
                 )
-        return out
+            return True

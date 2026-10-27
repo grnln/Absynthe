@@ -6,7 +6,7 @@ from interfaces import LabelingFunction, LabelingResult, PerturbationWalk, Pertu
 
 from graph.perturbations import RemoveEdgesPerturbation
 from chain.perturbation_chain_pipelines import BruteForcePerturbationChainPipeline
-from chain.perturbation_walks import NaturalOrderEdgePerturbationWalk
+from chain.perturbation_walks import NaturalOrderEdgePerturbationWalk, ProximityEdgePerturbationWalk
 
 class TestLabelingFunction(LabelingFunction):
     def __init__(self):
@@ -40,7 +40,7 @@ gen = MotifComposite(motifs = [["cycle", 4]])
 graph = gen.generate_graph()
 labeling = TestLabelingFunction()
 
-perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), NaturalOrderEdgePerturbationWalk())]
+perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), ProximityEdgePerturbationWalk())]
 pipeline = BruteForcePerturbationChainPipeline(
     graph,
     perturbations=perturbations,

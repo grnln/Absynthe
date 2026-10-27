@@ -1,8 +1,8 @@
 import abc
 import networkx as nx
 
-from abc import abstractmethod
 from typing import Any
+from abc import abstractmethod
 from graph.labeling_helpers import compute_labels
 
 from interfaces.perturbation import Perturbation
@@ -147,6 +147,4 @@ class PerturbationChainPipeline(abc.ABC):
                 ) and (self.max_iterations is None or num_iterations < self.max_iterations):
                     num_iterations += 1
 
-                self._reset_walks(exceptions = {perturbation})
-                walk.soft_reset()
         return chains
