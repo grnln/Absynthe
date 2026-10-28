@@ -251,6 +251,137 @@ class CentralityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
     def reset(self) -> None:
         self.traversed_edges.clear()
 
+    def soft_reset(self) -> None:
+        if len(self.traversed_edges) > 1:
+            edge = self.traversed_edges[-1]
+            
+            self.traversed_edges.clear()
+            self.traversed_edges.append(edge)
+
+class ConnectedComponentsNodePerturbationWalk(PerturbationWalk[Any]):
+    def __init__(self):
+        self.traversed_nodes: list[Any] = []
+
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[Any] | None:
+        last_perturbed_node = None
+        last_perturbed_graph = graph
+        candidate_nodes = [n for n in list(graph.nodes) if n not in self.traversed_nodes]
+        new_walk = deepcopy(self)
+        
+        for perturbation in reversed(chain):
+            for perturbation_type in edge_perturbation_types:
+                if perturbation_type in perturbation.changes:
+                    node_dict = perturbation.changes[perturbation_type]
+                    last_perturbed_node = node_dict[-1]['id']
+                    last_perturbed_graph = perturbation.graph
+                    break
+
+        if last_perturbed_node is None:
+            if len(candidate_nodes) > 0:
+                new_walk.traversed_nodes.append(candidate_nodes[0])
+                return new_walk
+            else:
+                return None
+
+        component = nx.node_connected_component(last_perturbed_graph, last_perturbed_node)
+        candidate_nodes = [n for n in candidate_nodes if n in component]
+
+        if len(candidate_nodes) <= 0:
+            return None
+
+        node_distances = {n: node_graph_distance(last_perturbed_node, n, last_perturbed_graph) for n in candidate_nodes}
+        new_walk.traversed_nodes.append(min(candidate_nodes, key = lambda n: node_distances[n]))
+        return new_walk
+
+    def current(self) -> Any:
+        return self.traversed_nodes[-1]
+
+    def reset(self) -> None:
+        self.traversed_nodes.clear()
+
+    def soft_reset(self) -> None:
+        if len(self.traversed_nodes) > 1:
+            node = self.traversed_nodes[-1]
+            
+            self.traversed_nodes.clear()
+            self.traversed_nodes.append(node)
+
+class ConnectedComponentsEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
+    def __init__(self):
+        self.traversed_edges: list[tuple[Any, Any]] = []
+
+    def _weigh_edge(self, edge: tuple[Any, Any], component: set[Any]) -> int:
+        u, v = edge
+        weight = 0
+
+        if u in component:
+            weight += 1
+        
+        if v in component:
+            weight += 1
+
+        return weight
+
+    def _try_connected_component(self, graph: nx.Graph[Any], node: Any, edge_distances: dict[tuple[Any, Any], float]) -> tuple[tuple[Any, Any], int] | None:
+        component = nx.node_connected_component(graph, node)
+        edge_weights = {edge: self._weigh_edge(edge, component) for edge in edge_distances}
+
+        if all([weight <= 0 for weight in edge_weights.values()]):
+            return None
+        
+        edge = min(edge_distances.keys(), key = lambda e: (-edge_weights[e], edge_distances[e]))
+        return edge, edge_weights[edge]
+
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[tuple[Any, Any]] | None:
+        last_perturbed_edge = None
+        last_perturbed_graph = graph
+        candidate_edges = [e for e in list(graph.edges) if e not in self.traversed_edges]
+        new_walk = deepcopy(self)
+        
+        for perturbation in reversed(chain):
+            for perturbation_type in edge_perturbation_types:
+                if perturbation_type in perturbation.changes:
+                    edge_dict = perturbation.changes[perturbation_type]
+                    last_perturbed_edge = (edge_dict[-1]['u'], edge_dict[-1]['v'])
+                    last_perturbed_graph = perturbation.graph
+                    break
+
+        if last_perturbed_edge is None:
+            if len(candidate_edges) > 0:
+                new_walk.traversed_edges.append(candidate_edges[0])
+                return new_walk
+            else:
+                return None
+        
+        edge_distances = {e: edge_graph_distance(last_perturbed_edge, e, last_perturbed_graph) for e in candidate_edges}
+
+        result_u = self._try_connected_component(last_perturbed_graph, last_perturbed_edge[0], edge_distances)
+        result_v = self._try_connected_component(last_perturbed_graph, last_perturbed_edge[0], edge_distances)
+
+        if result_u is not None:
+            edge, weight = result_u
+
+            if result_v is not None:
+                edge_v, weight_v = result_v
+
+                if weight_v > weight:
+                    edge = edge_v
+            new_walk.traversed_edges.append(edge)
+        elif result_v is not None:
+            edge, _ = result_v
+            new_walk.traversed_edges.append(edge)
+        else:
+            if len(candidate_edges) > 0:
+                new_walk.traversed_edges.append(candidate_edges[0])
+            else:
+                new_walk = None
+        return new_walk
+
+    def current(self) -> tuple[Any, Any]:
+        return self.traversed_edges[-1]
+    
+    def reset(self) -> None:
+        self.traversed_edges.clear()
 
     def soft_reset(self) -> None:
         if len(self.traversed_edges) > 1:
