@@ -19,8 +19,8 @@ class PerturbationChainPipeline(abc.ABC):
         perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]],
         labeling_functions: list[LabelingFunction],
         max_length: int,
-        max_iterations: int | None,
-        num_chains: int | None
+        max_iterations: int | None = None,
+        num_chains: int | None = None
     ) -> None:
         self.graph = graph;
         self.max_length = max_length
@@ -41,11 +41,14 @@ class PerturbationChainPipeline(abc.ABC):
         return out
 
     @abstractmethod
-    def _test_subchain(self, chain: PerturbationChain, subchain: PerturbationChain, subchain_length: int) -> bool:
-        pass
-
-    @abstractmethod
-    def _find_chain(self, graph: nx.Graph[Any], chain: PerturbationChain, chain_length: int, chains: list[PerturbationChain], num_chains: int | None) -> None:
+    def _find_chain(
+        self,
+        graph: nx.Graph[Any],
+        chain: PerturbationChain,
+        chain_length: int,
+        chains: list[PerturbationChain],
+        num_chains: int | None
+    ) -> None:
         pass
 
     def _test_perturbation(
@@ -71,7 +74,7 @@ class PerturbationChainPipeline(abc.ABC):
                 break
             
             out = perturbation.apply_by_walk(
-                graph, new_walk, chain
+                graph, new_walk
             )
 
             # Check for label changes
@@ -94,7 +97,6 @@ class PerturbationChainPipeline(abc.ABC):
     def _test_applied_perturbation(
         self,
         perturbation: AppliedPerturbation,
-        chain: PerturbationChain,
         graph: nx.Graph[Any],
         desired_result: bool = False
     ) -> AppliedPerturbation | None:
@@ -105,7 +107,7 @@ class PerturbationChainPipeline(abc.ABC):
         candidate_result = original_result
 
         out = perturbation.perturbation.apply_by_walk(
-            graph, perturbation.walk, chain
+            graph, perturbation.walk
         )
 
         # Check for label changes
@@ -123,6 +125,37 @@ class PerturbationChainPipeline(abc.ABC):
 
         if not result:
             out = None
+        return out
+
+    def _test_subchain(
+        self,
+        chain: PerturbationChain,
+        subchain: PerturbationChain,
+        subchain_length: int
+    ) -> bool:
+        out = True
+
+        if len(subchain) >= subchain_length:
+            result = None
+            acc_graph = self.graph
+
+            for perturbation in subchain:
+                result = self._test_applied_perturbation(perturbation, acc_graph)
+
+                if result is not None:
+                    acc_graph = result.graph
+    
+            out = result is not None
+        else:
+            for perturbation in [p for p in chain if p not in subchain]:
+                out = self._test_subchain(
+                    chain,
+                    subchain + PerturbationChain([perturbation]),
+                    subchain_length
+                )
+                
+                if out is False:
+                    break;
         return out
 
     def _find_chains(self, chain_length: int) -> list[PerturbationChain]:

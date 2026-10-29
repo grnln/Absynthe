@@ -1,3 +1,4 @@
+import random
 import networkx as nx
 
 from math import sqrt
@@ -380,6 +381,60 @@ class ConnectedComponentsEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]])
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
     
+    def reset(self) -> None:
+        self.traversed_edges.clear()
+
+    def soft_reset(self) -> None:
+        if len(self.traversed_edges) > 1:
+            edge = self.traversed_edges[-1]
+            
+            self.traversed_edges.clear()
+            self.traversed_edges.append(edge)
+
+class RandomNodePerturbationWalk(PerturbationWalk[Any]):
+    def __init__(self) -> None:
+        self.traversed_nodes: list[Any] = []
+
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[Any] | None:
+        candidate_nodes = sorted([n for n in list(graph.nodes) if n not in self.traversed_nodes])
+
+        if len(candidate_nodes) > 0:
+            new_walk = deepcopy(self)
+            new_walk.traversed_nodes.append(random.choice(candidate_nodes))
+            return new_walk
+        else:
+            return None
+ 
+    def current(self) -> Any:
+        return self.traversed_nodes[-1]
+
+    def reset(self) -> None:
+        self.traversed_nodes.clear()
+
+    def soft_reset(self) -> None:
+        if len(self.traversed_nodes) > 1:
+            node = self.traversed_nodes[-1]
+
+            self.traversed_nodes.clear()
+            self.traversed_nodes.append(node)
+
+class RandomEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
+    def __init__(self) -> None:
+        self.traversed_edges: list[tuple[Any, Any]] = []
+
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[tuple[Any, Any]] | None:
+        candidate_edges = sorted([e for e in list(graph.edges) if e not in self.traversed_edges], key = lambda x: x[0])
+
+        if len(candidate_edges) > 0:
+            new_walk = deepcopy(self)
+            new_walk.traversed_edges.append(random.choice(candidate_edges))
+            return new_walk
+        else:
+            return None
+            
+    def current(self) -> tuple[Any, Any]:
+        return self.traversed_edges[-1]
+
     def reset(self) -> None:
         self.traversed_edges.clear()
 

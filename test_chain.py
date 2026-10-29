@@ -2,11 +2,11 @@ import networkx as nx
 
 from typing import Any
 from graph.composite_graph_generator import MotifComposite
-from interfaces import LabelingFunction, LabelingResult, PerturbationWalk, Perturbation
 
-from graph.perturbations import RemoveEdgesPerturbation, RemoveNodesPerturbation
-from chain.perturbation_chain_pipelines import BruteForcePerturbationChainPipeline
-from chain.perturbation_walks import NaturalOrderEdgePerturbationWalk, ProximityEdgePerturbationWalk, CentralityEdgePerturbationWalk, CentralityNodePerturbationWalk, ConnectedComponentsEdgePerturbationWalk
+from graph.perturbations import RemoveEdgesPerturbation
+from chain.perturbation_chain_pipelines import  MCTSPerturbationChainPipeline
+from interfaces import LabelingFunction, LabelingResult, PerturbationWalk, Perturbation
+from chain.perturbation_walks import NaturalOrderEdgePerturbationWalk, RandomEdgePerturbationWalk
 
 class TestLabelingFunction(LabelingFunction):
     def __init__(self):
@@ -41,11 +41,12 @@ def test_square() -> None:
     graph = gen.generate_graph()
     labeling = TestLabelingFunction()
 
-    perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), ConnectedComponentsEdgePerturbationWalk())]
-    pipeline = BruteForcePerturbationChainPipeline(
+    perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), NaturalOrderEdgePerturbationWalk())]
+    pipeline = MCTSPerturbationChainPipeline(
         graph,
-        perturbations=perturbations,
-        labeling_functions=[labeling]
+        perturbations,
+        [labeling],
+        {perturbation: RandomEdgePerturbationWalk() for perturbation, _ in perturbations}
     )
     results = pipeline.find()
 
@@ -58,11 +59,12 @@ def test_k5() -> None:
     graph = nx.complete_graph(5)
     labeling = TestLabelingFunction()
 
-    perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(0.5), ConnectedComponentsEdgePerturbationWalk())]
-    pipeline = BruteForcePerturbationChainPipeline(
+    perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(0.5), NaturalOrderEdgePerturbationWalk())]
+    pipeline = MCTSPerturbationChainPipeline(
         graph,
-        perturbations=perturbations,
-        labeling_functions=[labeling]
+        perturbations,
+        [labeling],
+        {perturbation: RandomEdgePerturbationWalk() for perturbation, _ in perturbations}
     )
     results = pipeline.find()
 

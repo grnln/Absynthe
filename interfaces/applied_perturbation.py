@@ -18,7 +18,7 @@ class AppliedPerturbation:
         self.changes = changes
 
     def __str__(self) -> str:
-        return self.perturbation.__class__.__name__ + str(self.changes)
+        return f'{self.perturbation.__class__.__name__}[{str(self.walk.current())}]'
 
     def __repr__(self) -> str:
         return str(self)

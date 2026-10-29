@@ -183,3 +183,4 @@ web/frontend/node_modules/
 !web/frontend/src/lib/*.ts
 
 datasets/
+visualizations/

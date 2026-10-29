@@ -42,5 +42,5 @@ class Perturbation(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[Any], chain: Any) -> Any:
+    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[Any]) -> Any:
         pass
