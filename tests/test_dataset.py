@@ -82,5 +82,28 @@ def test_graph_dataset_generator():
     print(f"Perturbed variants: {len(metadata)}")
 
 
+def test_progress_callback_reports_every_base_graph(tmp_path):
+    """``progress_callback`` fires once per base graph, with and without perturbations."""
+    graph_gen = MotifComposite(motifs=[["cycle", 4], ["house"]])
+    labeling = [MotifLabelingFunction(motif_order=["cycle_4", "house"])]
+
+    calls = []
+    generator = GraphDatasetGenerator(
+        graph_generator=graph_gen,
+        labeling_functions=labeling,
+        perturbations=[(EdgePerturbation(p_remove=0.2), 1)],
+        output_dir=str(tmp_path / "with_perturbations"),
+        max_perturbation_iterations=3,
+    )
+    generator.generate_dataset(num_graphs=3, progress_callback=lambda done, total: calls.append((done, total)))
+    assert calls == [(1, 3), (2, 3), (3, 3)]
+
+    # Without perturbations the loop short-circuits; progress must still be reported.
+    calls.clear()
+    generator = GraphDatasetGenerator(graph_generator=graph_gen, output_dir=str(tmp_path / "plain"))
+    generator.generate_dataset(num_graphs=2, progress_callback=lambda done, total: calls.append((done, total)))
+    assert calls == [(1, 2), (2, 2)]
+
+
 if __name__ == "__main__":
     test_graph_dataset_generator()

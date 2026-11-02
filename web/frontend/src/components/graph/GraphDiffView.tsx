@@ -139,12 +139,12 @@ export function GraphDiffView({
             </Badge>
           )}
           {addedEdges.length > 0 && (
-            <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+            <Badge variant="success">
               +{addedEdges.length} edge{addedEdges.length !== 1 ? 's' : ''}
             </Badge>
           )}
           {removedEdges.length > 0 && (
-            <Badge className="bg-red-500/20 text-red-300 border-red-500/30">
+            <Badge variant="error">
               −{removedEdges.length} edge{removedEdges.length !== 1 ? 's' : ''}
             </Badge>
           )}

@@ -1,6 +1,6 @@
 import os
 import warnings
-from typing import List, Tuple, Dict, Any, Optional, Sequence
+from typing import Callable, List, Tuple, Dict, Any, Optional, Sequence
 
 from interfaces import GraphGenerator, GraphExporter, LabelingFunction, Perturbation, GraphLike
 from interfaces.exceptions import GraphSourceExhausted
@@ -185,7 +185,12 @@ class GraphDatasetGenerator:
                 entry[f"original_{name}_path"] = original_files[name]
         return entry
 
-    def generate_dataset(self, num_graphs: int, **graph_kwargs) -> List[Dict[str, Any]]:
+    def generate_dataset(
+        self,
+        num_graphs: int,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        **graph_kwargs,
+    ) -> List[Dict[str, Any]]:
         """Generate a dataset of perturbed graph variants.
 
         For each base graph:
@@ -213,6 +218,9 @@ class GraphDatasetGenerator:
 
         Args:
             num_graphs: Number of base graphs to generate.
+            progress_callback: Optional ``callback(done, total)`` invoked
+                after each base graph and its variants have been written,
+                with ``done`` in ``1..total``. Used for progress reporting.
             **graph_kwargs: Extra keyword arguments passed to
                 graph_generator.generate_graph().
 
@@ -256,48 +264,49 @@ class GraphDatasetGenerator:
 
             original_files = self.save_graph(graph, os.path.join(self.originals_dir, f"graph_{i}"))
 
-            if not (self.perturbations and self.labeling_functions):
-                continue
+            if self.perturbations and self.labeling_functions:
+                pipeline = PerturbationPipeline(
+                    perturbations=self.perturbations,
+                    labeling_functions=self.labeling_functions,
+                    max_iterations=self.max_perturbation_iterations,
+                )
+                results = pipeline.apply_and_check(graph)
 
-            pipeline = PerturbationPipeline(
-                perturbations=self.perturbations,
-                labeling_functions=self.labeling_functions,
-                max_iterations=self.max_perturbation_iterations,
-            )
-            results = pipeline.apply_and_check(graph)
+                for result in results:
+                    perturbed = result["perturbed_graph"]
+                    self._compute_and_store_labels(perturbed, 'observed_ground_truth')
 
-            for result in results:
-                perturbed = result["perturbed_graph"]
-                self._compute_and_store_labels(perturbed, 'observed_ground_truth')
+                    pert_folder = result["perturbation_folder"]
+                    pert_dir = self._perturbation_dirs[pert_folder]
+                    variant_files = self.save_graph(perturbed, os.path.join(pert_dir, f"graph_{graph_counter}"))
+                    perturbation_info: Dict[str, Any] = {
+                        "changes": result["changes"],
+                        "changed_nodes": result["changed_nodes"],
+                    }
+                    if result.get("changed_edges"):
+                        perturbation_info["changed_edges"] = self._serialize_changed_edges(
+                            result["changed_edges"]
+                        )
+                    if result.get("changed_graph_labels"):
+                        perturbation_info["changed_graph_labels"] = result["changed_graph_labels"]
+                    entry: Dict[str, Any] = {
+                        "graph_id": graph_counter,
+                        "base_graph_id": i,
+                        **self._path_entries(variant_files, original_files),
+                        "perturbation_name": pert_folder,
+                        "perturbation_info": perturbation_info,
+                    }
+                    if not is_plain(graph):
+                        entry["graph_kind"] = graph_kind(graph)
+                    if base_graph_labels:
+                        entry["graph_labels"] = base_graph_labels
+                    if base_motif_instances:
+                        entry["motif_instances"] = base_motif_instances
+                    metadata.append(entry)
+                    graph_counter += 1
 
-                pert_folder = result["perturbation_folder"]
-                pert_dir = self._perturbation_dirs[pert_folder]
-                variant_files = self.save_graph(perturbed, os.path.join(pert_dir, f"graph_{graph_counter}"))
-                perturbation_info: Dict[str, Any] = {
-                    "changes": result["changes"],
-                    "changed_nodes": result["changed_nodes"],
-                }
-                if result.get("changed_edges"):
-                    perturbation_info["changed_edges"] = self._serialize_changed_edges(
-                        result["changed_edges"]
-                    )
-                if result.get("changed_graph_labels"):
-                    perturbation_info["changed_graph_labels"] = result["changed_graph_labels"]
-                entry: Dict[str, Any] = {
-                    "graph_id": graph_counter,
-                    "base_graph_id": i,
-                    **self._path_entries(variant_files, original_files),
-                    "perturbation_name": pert_folder,
-                    "perturbation_info": perturbation_info,
-                }
-                if not is_plain(graph):
-                    entry["graph_kind"] = graph_kind(graph)
-                if base_graph_labels:
-                    entry["graph_labels"] = base_graph_labels
-                if base_motif_instances:
-                    entry["motif_instances"] = base_motif_instances
-                metadata.append(entry)
-                graph_counter += 1
+            if progress_callback is not None:
+                progress_callback(i + 1, num_graphs)
 
         self.save_metadata(metadata, os.path.join(self.output_dir, METADATA_FILENAME))
 

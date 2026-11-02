@@ -84,9 +84,9 @@ export function DatasetStudioPage() {
   const [error, setError] = useState<string | null>(null)
   const [completedTasks, setCompletedTasks] = useState<TaskStatus[]>([])
 
-  const wsUrl = taskId && taskStatus?.status === 'running'
-    ? `/ws/dataset/${taskId}`
-    : null
+  // Connect as soon as the task exists (its status starts as 'pending');
+  // taskId is cleared when the task finishes, which closes the socket.
+  const wsUrl = taskId ? `/api/dataset/ws/${taskId}` : null
 
   useWebSocket<TaskStatus>({
     url: wsUrl,
@@ -518,14 +518,20 @@ export function DatasetStudioPage() {
           <PagePanel>
             <div className="flex items-center gap-2 mb-1">
               <Database className="w-4 h-4 text-brand-400" />
-              <p className="text-sm font-semibold text-gray-200">Generation in progress</p>
+              <p className="text-sm font-semibold text-gray-200">
+                {taskStatus.status === 'completed'
+                  ? 'Generation finished'
+                  : taskStatus.status === 'failed'
+                  ? 'Generation failed'
+                  : 'Generation in progress'}
+              </p>
               <Badge
-                className={
+                variant={
                   taskStatus.status === 'completed'
-                    ? 'bg-green-500/20 text-green-300 border-green-500/30'
+                    ? 'success'
                     : taskStatus.status === 'failed'
-                    ? 'bg-red-500/20 text-red-300 border-red-500/30'
-                    : 'bg-brand-600/20 text-brand-300 border-brand-500/30'
+                    ? 'error'
+                    : 'info'
                 }
               >
                 {taskStatus.status}
@@ -550,13 +556,7 @@ export function DatasetStudioPage() {
             {completedTasks.map((task) => (
               <Card key={task.task_id} className="border-white/10">
                 <CardContent className="p-3 flex items-center gap-3">
-                  <Badge
-                    className={
-                      task.status === 'completed'
-                        ? 'bg-green-500/20 text-green-300 border-green-500/30'
-                        : 'bg-red-500/20 text-red-300 border-red-500/30'
-                    }
-                  >
+                  <Badge variant={task.status === 'completed' ? 'success' : 'error'}>
                     {task.status}
                   </Badge>
                   <div className="flex-1 min-w-0">

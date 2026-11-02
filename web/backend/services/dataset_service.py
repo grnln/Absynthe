@@ -82,6 +82,7 @@ def run_generation(task_id: str, request: DatasetGenerateRequest) -> None:
         )
         generator.generate_dataset(
             num_graphs=request.num_graphs,
+            progress_callback=lambda done, _total: _update(task_id, current=done),
             num_extra_vertices=request.num_extra_vertices,
             num_extra_edges=request.num_extra_edges,
             composition=request.composition,
