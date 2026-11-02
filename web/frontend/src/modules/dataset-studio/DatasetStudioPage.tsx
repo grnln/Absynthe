@@ -142,6 +142,17 @@ export function DatasetStudioPage() {
     setMotifs((prev) => prev.filter((_, i) => i !== idx))
   }
 
+  const updateMotifParam = (idx: number, paramIdx: number, value: number | string) => {
+    setMotifs((prev) =>
+      prev.map((m, i) => {
+        if (i !== idx) return m
+        const newParams = [...m.params]
+        newParams[paramIdx] = value
+        return { ...m, params: newParams }
+      }),
+    )
+  }
+
   const updateMotifCount = (idx: number, count: number) => {
     setMotifs((prev) =>
       prev.map((m, i) => (i === idx ? { ...m, count: Math.max(1, count), count_distribution: undefined } : m)),
@@ -305,13 +316,12 @@ export function DatasetStudioPage() {
             <div className="border-t border-white/10 pt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Motifs</p>
               <div className="flex flex-col gap-1.5 mb-2">
-                {motifs.map((motif, idx) => (
+                {motifs.map((motif, idx) => {
+                  const motifSchema = motifSchemas.find((s) => s.type === motif.type)
+                  return (
                   <div key={`${motif.type}-${idx}`} className="rounded-lg bg-white/5 px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <Badge color="#6366f1">{motif.type}</Badge>
-                      {motif.params.length > 0 && (
-                        <span className="text-xs text-gray-500 font-mono">{motif.params.join(', ')}</span>
-                      )}
+                      <Badge color="#6366f1">{motifSchema?.label ?? motif.type}</Badge>
                       <button
                         onClick={() => toggleMotifDistribution(idx)}
                         className={`ml-auto p-1 rounded transition-colors ${motif.count_distribution ? 'text-brand-400 bg-brand-500/20' : 'text-gray-600 hover:text-gray-400'}`}
@@ -341,8 +351,20 @@ export function DatasetStudioPage() {
                         </div>
                       )}
                     </div>
+                    {motifSchema?.params.map((param, paramIdx) => (
+                      <div key={param.name} className="mt-2">
+                        <Slider
+                          label={param.label}
+                          value={(motif.params[paramIdx] as number) ?? (param.default as number)}
+                          min={param.min ?? 1}
+                          max={(param.max as number) ?? 20}
+                          onValueChange={(value) => updateMotifParam(idx, paramIdx, value)}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
+                  )
+                })}
               </div>
               <div className="flex flex-wrap gap-1">
                 {motifSchemas.map((schema) => (
