@@ -40,6 +40,21 @@ MOTIF_SCHEMAS: List[Dict[str, Any]] = [
         "description": "Entry node, two parallel arms, exit node",
         "params": [{"name": "arm_length", "label": "Arm length", "type": "int", "default": 1, "min": 1}],
     },
+    {
+        "type": "grid",
+        "label": "Grid",
+        "description": "Rectangular lattice of rows x cols nodes",
+        "params": [
+            {"name": "rows", "label": "Rows", "type": "int", "default": 3, "min": 2},
+            {"name": "cols", "label": "Columns", "type": "int", "default": 3, "min": 2},
+        ],
+    },
+    {
+        "type": "clique",
+        "label": "Clique",
+        "description": "Complete graph K_n: every pair of n nodes is connected",
+        "params": [{"name": "num_nodes", "label": "Nodes", "type": "int", "default": 4, "min": 2}],
+    },
 ]
 
 COMPOSITION_SCHEMAS: List[Dict[str, Any]] = [

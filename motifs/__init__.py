@@ -3,8 +3,18 @@ from .house_motif_generator import HouseMotifGenerator
 from .chain_motif_generator import ChainMotifGenerator
 from .star_motif_generator import StarMotifGenerator
 from .gate_motif_generator import GateMotifGenerator
+from .grid_motif_generator import GridMotifGenerator
+from .clique_motif_generator import CliqueMotifGenerator
 
-__all__ = ['CycleMotifGenerator', 'HouseMotifGenerator', 'ChainMotifGenerator', 'StarMotifGenerator', 'GateMotifGenerator']
+__all__ = [
+    'CycleMotifGenerator',
+    'HouseMotifGenerator',
+    'ChainMotifGenerator',
+    'StarMotifGenerator',
+    'GateMotifGenerator',
+    'GridMotifGenerator',
+    'CliqueMotifGenerator',
+]
 
 motif_generators = {
     "cycle": CycleMotifGenerator,
@@ -12,6 +22,8 @@ motif_generators = {
     "chain": ChainMotifGenerator,
     "star": StarMotifGenerator,
     "gate": GateMotifGenerator,
+    "grid": GridMotifGenerator,
+    "clique": CliqueMotifGenerator,
 }
 
 # Maps motif base names to the keyword argument names expected by
@@ -22,4 +34,6 @@ motif_param_names = {
     "chain": ["length"],
     "star": ["num_leaves"],
     "gate": ["arm_length"],
+    "grid": ["rows", "cols"],
+    "clique": ["num_nodes"],
 }

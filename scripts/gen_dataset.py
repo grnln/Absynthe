@@ -113,7 +113,7 @@ def _datasets_from_python_configs() -> List[Dict[str, Any]]:
             "max_perturbation_iterations": 15,
             "gen_kwargs": {
                 "num_graphs": NUM_GRAPHS,
-                "num_extra_vertices": 2,
+                "num_extra_vertices": 0,
                 "num_extra_edges": 0,
                 "composition": "sequential",
             },

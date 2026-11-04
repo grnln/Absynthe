@@ -16,7 +16,7 @@ Core dependency: `networkx`. Optional: `matplotlib` (for visualization).
 
 ## Core Concepts
 
-- **Motif**: A small structural subgraph pattern (cycle, house, chain, star, gate).
+- **Motif**: A small structural subgraph pattern (cycle, house, chain, star, gate, grid, clique).
 - **Composite graph**: A graph built by composing multiple motif instances connected via a composition pattern.
 - **Labeling**: Assigning labels to nodes based on which motif they belong to.
 - **Perturbation**: A controlled modification to a graph (removing nodes, adding/removing edges).
@@ -58,6 +58,8 @@ Each node in the generated graph has attributes:
 | `chain` | `length`      | 3       | 2   | Linear path of n nodes               |
 | `star`  | `num_leaves`  | 3       | 1   | Central hub with n leaf nodes        |
 | `gate`  | `arm_length`  | 1       | 1   | Entry/exit with two parallel arms    |
+| `grid`  | `rows`, `cols`| 3, 3    | 2, 2| Rectangular lattice of rows x cols   |
+| `clique`| `num_nodes`   | 4       | 2   | Complete graph K_n                   |
 
 Parameters are passed positionally after the type name:
 
@@ -66,8 +68,12 @@ Parameters are passed positionally after the type name:
 ["star", 4]       # num_leaves=4
 ["gate", 2]       # arm_length=2
 ["chain", 6]      # length=6
+["grid", 2, 3]    # rows=2, cols=3
+["clique", 5]     # num_nodes=5
 ["house"]         # no parameters
 ```
+
+The same motifs can be used as labels in `MotifLabelingFunction` by name, with the parameters joined by `_` (e.g. `"cycle_4"`, `"grid_2_3"`, `"clique_5"`).
 
 ### Composition Patterns
 
