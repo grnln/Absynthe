@@ -4,6 +4,7 @@ from typing import Any
 from graph.composite_graph_generator import MotifComposite
 
 from graph.perturbations import RemoveEdgesPerturbation
+from chain.perturbation_chains import BasePerturbationChain
 from chain.perturbation_chain_pipelines import  HeuristicPerturbationChainPipeline, MCTSPerturbationChainPipeline
 from interfaces import LabelingFunction, LabelingResult, PerturbationHeuristic, Perturbation
 from chain.perturbation_heuristics import NaturalOrderEdgePerturbationHeuristic, RandomEdgePerturbationHeuristic, ConnectedComponentsEdgePerturbationHeuristic
@@ -42,12 +43,11 @@ def test_square() -> None:
     labeling = TestLabelingFunction()
 
     perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), NaturalOrderEdgePerturbationHeuristic())]
-    pipeline = MCTSPerturbationChainPipeline(
+    pipeline = HeuristicPerturbationChainPipeline(
         graph,
         perturbations,
         [labeling],
-        visualize_tree = True,
-        max_training_iterations = 100
+        BasePerturbationChain
     )
     results = pipeline.find()
 
@@ -61,12 +61,11 @@ def test_k5() -> None:
     labeling = TestLabelingFunction()
 
     perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveEdgesPerturbation(0.5), NaturalOrderEdgePerturbationHeuristic())]
-    pipeline = MCTSPerturbationChainPipeline(
+    pipeline = HeuristicPerturbationChainPipeline(
         graph,
         perturbations,
         [labeling],
-        visualize_tree = True,
-        max_training_iterations = 1000
+        BasePerturbationChain
     )
     results = pipeline.find()
 

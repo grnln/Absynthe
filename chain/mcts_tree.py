@@ -4,9 +4,9 @@ import graphviz
 import networkx as nx
 
 from copy import deepcopy
-from typing import Any, Callable
+from typing import Any
 from interfaces import LabelingFunction
-from interfaces import Perturbation, PerturbationHeuristic, PerturbationChain, AppliedPerturbation
+from interfaces import Perturbation, PerturbationHeuristic, PerturbationChain
 
 class MCTSTree:
     def __init__(
@@ -71,7 +71,6 @@ class MCTSTree:
         self,
         graph: nx.Graph[Any],
         labeling_functions: list[LabelingFunction],
-        test_perturbation: Callable[[Perturbation, PerturbationHeuristic[Any], PerturbationChain, nx.Graph[Any], bool], AppliedPerturbation | None],
         chain_length: int,
         chains: set[PerturbationChain],
         ordered: bool
@@ -84,7 +83,11 @@ class MCTSTree:
 
         while step < num_steps:
             perturbation = random.choice(list(self.expansion_heuristics.keys()))
-            result = test_perturbation(perturbation, self.simulation_heuristics[perturbation], chain, acc_graph, step >= (num_steps - 1))
+            result = chain.test_potential_perturbation(
+                perturbation,
+                self.simulation_heuristics[perturbation],
+                labeling_functions, acc_graph, step >= (num_steps - 1)
+            )
 
             if result is None:
                 return False

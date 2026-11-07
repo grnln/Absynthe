@@ -486,7 +486,7 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
         graph: nx.Graph[Any],
         labeling_functions: list[LabelingFunction],
         expansion_heuristics: dict[Perturbation, PerturbationHeuristic[Any]],
-        test_perturbation: Callable[[Perturbation, PerturbationHeuristic[Any], PerturbationChain, nx.Graph[Any], bool], AppliedPerturbation | None],
+        chain_type: type[PerturbationChain],
         max_length: int = 4,
         max_training_iterations: int = 100,
         mcts_exploration_param: float = sqrt(2.0),
@@ -494,7 +494,7 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
         ordered: bool = False
     ) -> None:
         self.graph = graph
-        self.test_perturbation = test_perturbation
+        self.chain_type = chain_type
         self.labeling_functions = labeling_functions
 
         self.max_length = max_length
@@ -502,7 +502,7 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
 
         self.tree = MCTSTree(
             None,
-            PerturbationChain([]),
+            self.chain_type([]),
             expansion_heuristics,
             graph,
             mcts_exploration_param
@@ -538,7 +538,6 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
             valid_chain = node.simulate(
                 self.graph,
                 self.labeling_functions,
-                self.test_perturbation,
                 random.randint(2, self.max_length),
                 chains,
                 self.ordered
