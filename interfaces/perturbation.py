@@ -3,7 +3,7 @@ from typing import Tuple, Dict, Any, Optional
 import networkx as nx
 
 from .perturbation_hint import PerturbationHint
-from .perturbation_walk import PerturbationWalk
+from .perturbation_heuristic import PerturbationHeuristic
 
 class Perturbation(abc.ABC):
     """Abstract base class for graph perturbations.
@@ -42,5 +42,5 @@ class Perturbation(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[Any]) -> Any:
+    def apply_heuristic(self, graph: nx.Graph[Any], heuristic: PerturbationHeuristic[Any]) -> Any:
         pass

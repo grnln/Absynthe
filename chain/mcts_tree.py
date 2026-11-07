@@ -5,18 +5,16 @@ import networkx as nx
 
 from copy import deepcopy
 from typing import Any, Callable
-from interfaces import Perturbation, PerturbationWalk, PerturbationChain, AppliedPerturbation
+from interfaces import LabelingFunction
+from interfaces import Perturbation, PerturbationHeuristic, PerturbationChain, AppliedPerturbation
 
 class MCTSTree:
     def __init__(
         self,
         parent: MCTSTree | None,
-        perturbation: Perturbation,
-        walks: dict[Perturbation, PerturbationWalk[Any]],
-        random_walks: dict[Perturbation, PerturbationWalk[Any]],
-        graph: nx.Graph[Any],
         chain: PerturbationChain,
-        chain_length: int,
+        expansion_heuristics: dict[Perturbation, PerturbationHeuristic[Any]],
+        graph: nx.Graph[Any],
         exploration_param: float = math.sqrt(2.0)
     ) -> None:
         self.level = 0
@@ -24,73 +22,69 @@ class MCTSTree:
         self.num_simulations = 0
         self.exploration_param = exploration_param
 
-        self.walks = walks
+        self.chain = chain
+        self.graph = graph
         self.parent = parent
-        self.chain_length = chain_length
-        self.random_walks = random_walks
+        self.expansion_heuristics = expansion_heuristics
+        self.initial_heuristics = {p: deepcopy(self.expansion_heuristics[p]) for p in self.expansion_heuristics}
+        self.simulation_heuristics = {p: deepcopy(self.expansion_heuristics[p]) for p in self.expansion_heuristics}
 
         self.children: list[MCTSTree] = []
-        self.expanded: dict[Perturbation, bool] = {perturbation: False for perturbation in walks}
+        self.expanded: dict[Perturbation, bool] = {perturbation: False for perturbation in self.expansion_heuristics}
         
-        self.perturbation = perturbation.apply_by_walk(graph, walks[perturbation])
-        self.chain = chain + PerturbationChain([self.perturbation])
-
-    def perturbed_element(self) -> Any:
-        return self.perturbation.walk.current()
-
     def add_child(self, child: MCTSTree) -> None:
         child.level = self.level + 1
         self.children.append(child)
 
     def expand(self) -> None:
         for perturbation in [p for p in self.expanded if self.expanded[p] == False]:
-            walks = {p: self.walks[p] for p in self.walks}
-            walk = walks[perturbation]
+            heuristic = self.expansion_heuristics[perturbation]
 
             while True:
-                walk = walk.next(self.perturbation.graph, self.chain)
+                graph = self.chain[-1].graph if len(self.chain) > 0 else self.graph
+                heuristic = heuristic.next(graph, self.chain)
 
-                if walk is None:
+                if heuristic is None:
+                    self.expanded[perturbation] = True
                     break
                 
-                walks[perturbation] = walk
-                
+                self.expansion_heuristics[perturbation] = heuristic
+
+                result = perturbation.apply_heuristic(graph, deepcopy(heuristic))
+                new_chain = self.chain + PerturbationChain([result])                
+
+                heuristics = {p: deepcopy(self.initial_heuristics[p]) for p in self.initial_heuristics}
+                heuristics[perturbation].add(heuristic.current())
+
                 child = MCTSTree(
                     self,
-                    perturbation,
-                    walks,
-                    self.random_walks,
-                    self.perturbation.graph,
-                    self.chain,
-                    self.chain_length
+                    new_chain,
+                    heuristics,
+                    graph
                 )
                 
                 if child not in self.children:
                     self.add_child(child)
                     break
 
-            if walk is None:
-                self.expanded[perturbation] = True
-
     def simulate(
         self,
-        test_perturbation: Callable[[Perturbation, PerturbationWalk[Any], PerturbationChain, nx.Graph[Any], bool], AppliedPerturbation | None],
-        test_subchain: Callable[[PerturbationChain, PerturbationChain, int], bool]
+        graph: nx.Graph[Any],
+        labeling_functions: list[LabelingFunction],
+        test_perturbation: Callable[[Perturbation, PerturbationHeuristic[Any], PerturbationChain, nx.Graph[Any], bool], AppliedPerturbation | None],
+        chain_length: int,
+        chains: set[PerturbationChain],
+        ordered: bool
     ) -> bool:
         step = 0
         chain = deepcopy(self.chain)
 
-        acc_graph = self.perturbation.graph
-        num_steps = self.chain_length - (self.level + 1)
+        acc_graph = self.chain[-1].graph if len(self.chain) > 0 else self.graph
+        num_steps = chain_length - self.level
 
         while step < num_steps:
-            perturbation = random.choice(list(self.walks.keys()))
-            walk = self.random_walks[perturbation].next(acc_graph, chain)
-
-            if walk is None:
-                return False
-
-            result = test_perturbation(perturbation, self.random_walks[perturbation], chain, acc_graph, step >= (num_steps - 1))
+            perturbation = random.choice(list(self.expansion_heuristics.keys()))
+            result = test_perturbation(perturbation, self.simulation_heuristics[perturbation], chain, acc_graph, step >= (num_steps - 1))
 
             if result is None:
                 return False
@@ -98,22 +92,17 @@ class MCTSTree:
             chain.append(result)
             acc_graph = result.graph
 
-            self.random_walks[perturbation] = result.walk
+            self.simulation_heuristics[perturbation] = result.heuristic
             step += 1
 
-        if self.chain_length > 2:
-            for subchain_length in range(2, self.chain_length):
-                for perturbation in chain:
-                    if not test_subchain(
-                        chain,
-                        PerturbationChain([perturbation]),
-                        subchain_length
-                    ):
-                        return False
+        self.simulation_heuristics = {p: deepcopy(self.expansion_heuristics[p]) for p in self.expansion_heuristics}
 
-        for perturbation in self.walks:
-            self.random_walks[perturbation].reset()
-        return True
+        if chain.is_valid(graph, labeling_functions):
+            if ordered or (not ordered and not any([chain.match_perturbation_set(c) for c in chains])):
+                chains.add(chain)
+            return True
+
+        return False
 
     def backpropagate(self, valid_chain: bool) -> None:
         self.num_simulations += 1
@@ -144,19 +133,25 @@ class MCTSTree:
         return all(self.expanded.values())
 
     def is_leaf(self) -> bool:
-        return ((self.level + 1) >= self.chain_length) or (self.is_expanded() and len(self.children) <= 0)
-    
+        return (self.is_expanded() and len(self.children) <= 0)
+
+    def visualize(self, dot: Any) -> None:
+        dot.node(f'{self.chain}')
+
+        if self.parent is not None:
+            dot.edge(f'{self.parent.chain}', f'{self.chain}')
+
+        for child in self.children:
+            child.visualize(dot)
+
+    def perturbation(self) -> Perturbation | None:
+        return self.chain[-1].perturbation if len(self.chain) > 0 else None
+
+    def perturbed_element(self) -> Any:
+        return self.chain[-1].heuristic.current() if len(self.chain) > 0 else None
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, MCTSTree):
             return False
         
-        return type(self.perturbation) == type(other.perturbation) and self.perturbed_element() == other.perturbed_element()
-
-    def visualize(self, dot: graphviz.Dot) -> None:
-        dot.node(f'{self.level}. {self.perturbation}')
-
-        if self.parent is not None:
-            dot.edge(f'{self.parent.level}. {self.parent.perturbation}', f'{self.level}. {self.perturbation}')
-
-        for child in self.children:
-            child.visualize(dot)
+        return type(self.perturbation()) == type(other.perturbation()) and self.perturbed_element() == other.perturbed_element()

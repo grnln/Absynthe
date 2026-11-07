@@ -8,5 +8,5 @@ from .exceptions import GraphSourceExhausted
 
 from .perturbation_chain_pipeline import PerturbationChainPipeline
 from .perturbation_chain import AppliedPerturbation, PerturbationChain
-from .perturbation_walk import PerturbationWalk
+from .perturbation_heuristic import PerturbationHeuristic
 from .applied_perturbation import AppliedPerturbation

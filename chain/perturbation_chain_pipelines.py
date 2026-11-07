@@ -1,17 +1,16 @@
-import graphviz
 import networkx as nx
 
+from math import sqrt
 from typing import Any
 from copy import deepcopy
-from datetime import datetime
-from .mcts_tree import MCTSTree
-from interfaces import Perturbation, PerturbationWalk, PerturbationChainPipeline, PerturbationChain, LabelingFunction
+from .perturbation_heuristics import MCTSPerturbationHeuristic
+from interfaces import Perturbation, PerturbationHeuristic, PerturbationChainPipeline, PerturbationChain, LabelingFunction
 
 class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
     def __init__(
         self,
         graph: nx.Graph[Any],
-        perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]],
+        perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]],
         labeling_functions: list[LabelingFunction],
         max_length: int = 4,
         max_iterations: int | None = None,
@@ -26,39 +25,34 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
         graph: nx.Graph[Any],
         chain: PerturbationChain,
         chain_length: int,
-        chains: list[PerturbationChain],
+        chains: set[PerturbationChain],
         num_chains: int | None
     ) -> None:
         if num_chains is not None and len(chains) >= num_chains:
             return
         
         if len(chain) >= chain_length:
-            result = None
+            if not chain.check_subchain_validity(self.graph, self.labeling_functions):
+                return
 
-            if chain_length > 2:
-                for subchain_length in range(2, chain_length):
-                    for perturbation in chain:
-                        if not self._test_subchain(
-                            chain,
-                            PerturbationChain([perturbation]),
-                            subchain_length
-                        ):
-                            return
-            
-            if self.ordered or (not self.ordered and not any([chain == c for c in chains])):
-                chains.append(chain)
+            if self.ordered or (not self.ordered and not any([chain.match_perturbation_set(c) for c in chains])):
+                chains.add(chain)
         else:
             for perturbation in self.perturbations:
-                walk: PerturbationWalk[Any] | None = self.walks[perturbation]
+                heuristic: PerturbationHeuristic[Any] | None = self.heuristics[perturbation]
 
-                while walk is not None:
-                    result = self._test_perturbation(perturbation, walk, chain, graph, desired_result = len(chain) >= (chain_length - 1))
+                while heuristic is not None:
+                    result = self._test_perturbation(perturbation, heuristic, chain, graph, desired_result = len(chain) >= (chain_length - 1))
 
                     if result is None:
-                        walk = walk.next(self.graph, chain)
+                        heuristic = heuristic.next(self.graph, chain)
                         continue
 
-                    walk = deepcopy(result.walk)
+                    heuristic = deepcopy(result.heuristic)
+                    new_chain = chain + PerturbationChain([result])
+                    
+                    if any([new_chain == detected_chain for detected_chain in [c for c in chains if len(c) == len(new_chain)]]):
+                        return
 
                     self._find_chain(
                         result.graph,
@@ -68,125 +62,153 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
                         num_chains
                     )
 
+    def _find_chains(self, chain_length: int) -> set[PerturbationChain]:
+        chains: set[PerturbationChain] = set()
+    
+        for perturbation in self.perturbations:
+            num_iterations = 0
+            heuristic: PerturbationHeuristic[Any] | None = self.heuristics[perturbation]
+
+            while heuristic is not None and (
+                self.max_iterations is None or num_iterations < self.max_iterations
+            ) and (
+                self.num_chains is None or len(chains) < self.num_chains
+            ):
+                result = self._test_perturbation(perturbation, heuristic, PerturbationChain([]), self.graph)
+
+                if result is None:
+                    heuristic = heuristic.next(self.graph, PerturbationChain([]))
+                    continue
+
+                heuristic = deepcopy(result.heuristic)
+                result.heuristic.soft_reset()
+                self.heuristics[perturbation] = deepcopy(result.heuristic)
+                
+                self._find_chain(
+                    result.graph,
+                    PerturbationChain([result]),
+                    chain_length,
+                    chains,
+                    self.num_chains
+                )
+                num_iterations += 1
+
+        for perturbation in self.heuristics:
+            self.heuristics[perturbation].reset()
+
+        return chains
+
 class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
     def __init__(
         self,
         graph: nx.Graph[Any],
-        perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]],
+        perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]],
         labeling_functions: list[LabelingFunction],
-        random_walks: dict[Perturbation, PerturbationWalk[Any]],
         max_length: int = 4,
-        max_mcts: int = 10,
-        max_mcts_iterations: int = 1000,
+        max_training_iterations: int = 1000,
+        mcts_exploration_param: float = sqrt(2.0),
         num_chains: int | None = None,
         ordered: bool = False,
         visualize_tree: bool = False
     ) -> None:
         super().__init__(graph, perturbations, labeling_functions, max_length, num_chains = num_chains)
         self.ordered = ordered
-        self.max_mcts = max_mcts
-        self.random_walks = random_walks
         self.visualize_tree = visualize_tree
-        self.max_mcts_iterations = max_mcts_iterations
-
-    def _check_chain(self, chain: PerturbationChain) -> bool:
-        result = None
-        acc_graph = self.graph
-
-        for i in range(len(chain)):
-            result = self._test_applied_perturbation(chain[i], acc_graph, i >= (len(chain) - 1))
-
-            if result is None:
-                break
-
-            acc_graph = result.graph
-
-        return (result is not None)
-
-    def _check_subchain(self, chain: PerturbationChain) -> bool:
-        if len(chain) > 2:
-            for subchain_length in range(2, len(chain)):
-                for perturbation in chain:
-                    if not self._test_subchain(
-                        chain,
-                        PerturbationChain([perturbation]),
-                        subchain_length
-                    ):
-                        return False
-        return True
-
-    def _train_tree(self, tree: MCTSTree) -> None:
-        for _ in range(self.max_mcts_iterations):
-            node = tree
-            
-            while not node.is_leaf() and node.is_expanded():
-                node = node.best_child()
-        
-            if not node.is_leaf() and not node.is_expanded():
-                node.expand()
-
-            if len(node.children) <= 0:
-                node = tree
-        
-            valid_chain = node.simulate(self._test_perturbation, self._test_subchain)
-            node.backpropagate(valid_chain)
-
-    def _visualize_tree(self, tree: MCTSTree) -> None:
-        dot = graphviz.Graph(f'MCTS_{datetime.now().strftime("%Y%m%d_%H%M%S")}', format = 'png')
-        tree.visualize(dot)
-        dot.render(directory = 'visualizations')
-
-    def _build_chain(self, tree: MCTSTree, chain_length: int) -> PerturbationChain | None:
-        candidate_chain = PerturbationChain([tree.perturbation])
-        
-        for _ in range(chain_length - 1):
-            if len(tree.children) <= 0:
-                break
-                        
-            tree = tree.most_simulated_child()
-            candidate_chain.append(tree.perturbation)
-
-        if len(candidate_chain) != chain_length:
-            return None
-        
-        return candidate_chain
+        self.heuristic = MCTSPerturbationHeuristic(
+            graph,
+            labeling_functions,
+            self.heuristics,
+            self._test_perturbation,
+            max_length,
+            max_training_iterations,
+            mcts_exploration_param,
+            visualize_tree,
+            ordered
+        )
+        self.training_found_chains = self.heuristic.get_found_chains()
 
     def _find_chain(
         self,
-        graph: nx.Graph[Any],
         chain: PerturbationChain,
         chain_length: int,
-        chains: list[PerturbationChain],
-        num_chains: int | None
+        chains: set[PerturbationChain],
+        num_chains: int | None,
+        heuristic: MCTSPerturbationHeuristic
     ) -> None:
         if num_chains is not None and len(chains) >= num_chains:
             return
-
-        tree = MCTSTree(
-            None,
-            chain[0].perturbation,
-            self.walks,
-            self.random_walks,
-            self.graph,
-            chain,
-            chain_length
-        )
-        self._train_tree(tree)
         
-        for _ in range(self.max_mcts):
-            candidate_chain = self._build_chain(tree, chain_length)
-            
-            if candidate_chain is None:
-                continue
+        if len(chain) >= chain_length:
+            if not chain.check_subchain_validity(self.graph, self.labeling_functions):
+                return
 
-            if not self._check_chain(candidate_chain):
-                continue
+            if self.ordered or (not self.ordered and not any([chain.match_perturbation_set(c) for c in chains])):
+                chains.add(chain)
+        else:
+            new_heuristic = heuristic
 
-            if not self._check_subchain(candidate_chain):
-                continue
+            while True:
+                new_heuristic = new_heuristic.next(self.graph, chain)
+                working_graph = chain[-1].graph if len(chain) > 0 else self.graph
 
-            if self.ordered or (not self.ordered and not any([candidate_chain == c for c in chains])):
-                chains.append(candidate_chain)
+                if new_heuristic is None:
+                    return
 
-        if self.visualize_tree:
-            self._visualize_tree(tree)
+                new_chain = chain + PerturbationChain([new_heuristic.current()])
+
+                if any([new_chain == detected_chain for detected_chain in [c for c in chains if len(c) == len(new_chain)]]):
+                    return
+                
+                result = new_chain.test_perturbation(
+                    -1,
+                    working_graph,
+                    self.labeling_functions,
+                    desired_result = len(new_chain) >= chain_length
+                )
+
+                if result is None:
+                    continue
+
+                self._find_chain(new_chain, chain_length, chains, num_chains, new_heuristic)
+
+    def _find_chains(self, chain_length: int) -> set[PerturbationChain]:
+        chains: set[PerturbationChain] = set()
+        chains = chains.union(self.training_found_chains)
+    
+        for perturbation in self.perturbations:
+            num_iterations = 0
+            heuristic = self.heuristic
+
+            while heuristic is not None and (
+                self.max_iterations is None or num_iterations < self.max_iterations
+            ) and (
+                self.num_chains is None or len(chains) < self.num_chains
+            ):
+                heuristic = heuristic.next(self.graph, PerturbationChain([]))
+
+                if heuristic is None:
+                    break
+
+                chain = PerturbationChain([heuristic.current()])
+
+                if chain.test_perturbation(-1, self.graph, self.labeling_functions) is None:
+                    heuristic = heuristic.next(self.graph, PerturbationChain([]))
+                    continue
+
+                new_heuristic = deepcopy(heuristic)
+                new_heuristic.soft_reset()
+
+                self._find_chain(
+                    chain,
+                    chain_length,
+                    chains,
+                    self.num_chains,
+                    new_heuristic
+                )
+                num_iterations += 1
+
+        for perturbation in self.heuristics:
+            self.heuristics[perturbation].reset()
+        
+        self.heuristic.reset()
+        return chains

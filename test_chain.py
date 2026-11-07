@@ -4,9 +4,9 @@ from typing import Any
 from graph.composite_graph_generator import MotifComposite
 
 from graph.perturbations import RemoveEdgesPerturbation
-from chain.perturbation_chain_pipelines import  MCTSPerturbationChainPipeline
-from interfaces import LabelingFunction, LabelingResult, PerturbationWalk, Perturbation
-from chain.perturbation_walks import NaturalOrderEdgePerturbationWalk, RandomEdgePerturbationWalk
+from chain.perturbation_chain_pipelines import  HeuristicPerturbationChainPipeline, MCTSPerturbationChainPipeline
+from interfaces import LabelingFunction, LabelingResult, PerturbationHeuristic, Perturbation
+from chain.perturbation_heuristics import NaturalOrderEdgePerturbationHeuristic, RandomEdgePerturbationHeuristic, ConnectedComponentsEdgePerturbationHeuristic
 
 class TestLabelingFunction(LabelingFunction):
     def __init__(self):
@@ -41,12 +41,13 @@ def test_square() -> None:
     graph = gen.generate_graph()
     labeling = TestLabelingFunction()
 
-    perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), NaturalOrderEdgePerturbationWalk())]
+    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), NaturalOrderEdgePerturbationHeuristic())]
     pipeline = MCTSPerturbationChainPipeline(
         graph,
         perturbations,
         [labeling],
-        {perturbation: RandomEdgePerturbationWalk() for perturbation, _ in perturbations}
+        visualize_tree = True,
+        max_training_iterations = 100
     )
     results = pipeline.find()
 
@@ -59,12 +60,13 @@ def test_k5() -> None:
     graph = nx.complete_graph(5)
     labeling = TestLabelingFunction()
 
-    perturbations: list[tuple[Perturbation, PerturbationWalk[Any]]] = [(RemoveEdgesPerturbation(0.5), NaturalOrderEdgePerturbationWalk())]
+    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveEdgesPerturbation(0.5), NaturalOrderEdgePerturbationHeuristic())]
     pipeline = MCTSPerturbationChainPipeline(
         graph,
         perturbations,
         [labeling],
-        {perturbation: RandomEdgePerturbationWalk() for perturbation, _ in perturbations}
+        visualize_tree = True,
+        max_training_iterations = 1000
     )
     results = pipeline.find()
 

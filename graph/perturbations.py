@@ -5,7 +5,7 @@ from interfaces import Perturbation, PerturbationHint, AppliedPerturbation
 from .perturbation_strategies import STRATEGY_MAP
 from utils.rng import get_rng
 
-from interfaces import PerturbationChain, PerturbationWalk
+from interfaces import PerturbationChain, PerturbationHeuristic
 
 # ---------------------------------------------------------------------------
 # Hint helpers
@@ -158,11 +158,11 @@ class RemoveNodesPerturbation(Perturbation):
         removed_info = self._get_removed_info(graph, removed)
         return new_graph, {"removed_nodes": removed_info}
 
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[Any]) -> AppliedPerturbation:
+    def apply_heuristic(self, graph: nx.Graph[Any], heuristic: PerturbationHeuristic[Any]) -> AppliedPerturbation:
         nodes = list[Any]()
 
         for _ in range(self.num_nodes):
-            node = walk.current()
+            node = heuristic.current()
             nodes.append(node)
 
         working_graph = graph.copy()
@@ -170,7 +170,7 @@ class RemoveNodesPerturbation(Perturbation):
 
         return AppliedPerturbation(
             self,
-            walk,
+            heuristic,
             working_graph,
             {"removed_nodes": self._get_removed_info(graph, nodes)}
         )
@@ -212,11 +212,11 @@ class RemoveEdgesPerturbation(Perturbation):
         removed_info = self._get_removed_info(graph, removed)
         return new_graph, {"removed_edges": removed_info}
 
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[tuple[Any, Any]]) -> AppliedPerturbation:
+    def apply_heuristic(self, graph: nx.Graph[Any], heuristic: PerturbationHeuristic[tuple[Any, Any]]) -> AppliedPerturbation:
         edges = set[tuple[Any, Any]]()
 
         for _ in range(self.num_edges):            
-            edge = walk.current()
+            edge = heuristic.current()
             edges.add(edge)
 
         working_graph = graph.copy()
@@ -226,7 +226,7 @@ class RemoveEdgesPerturbation(Perturbation):
         
         return AppliedPerturbation(
             self,
-            walk,
+            heuristic,
             working_graph,
             {"removed_edges": self._get_removed_info(graph, edges)}
         )
@@ -259,14 +259,14 @@ class AddEdgesPerturbation(Perturbation):
         )
         return new_graph, {"added_edges": self._get_added_info(graph, new_graph)}
 
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[tuple[Any, Any]]) -> AppliedPerturbation:
+    def apply_heuristic(self, graph: nx.Graph[Any], heuristic: PerturbationHeuristic[tuple[Any, Any]]) -> AppliedPerturbation:
         edges = set[tuple[Any, Any]]()
 
         if self.add_num is None:
-            raise ValueError("The number of edges to add must be provided to apply the perturbation based on a walk.")
+            raise ValueError("The number of edges to add must be provided to apply the perturbation based on a heuristic.")
 
         for _ in range(self.add_num):
-            edge = walk.current()
+            edge = heuristic.current()
             edges.add(edge)
 
         working_graph = graph.copy()
@@ -276,7 +276,7 @@ class AddEdgesPerturbation(Perturbation):
 
         return AppliedPerturbation(
             self,
-            walk,
+            heuristic,
             working_graph,
             {"added_edges": self._get_added_info(graph, working_graph)}
         )
@@ -325,14 +325,14 @@ class EdgePerturbation(Perturbation):
             "added_edges": added_edges
         }
 
-    def apply_by_walk(self, graph: nx.Graph[Any], walk: PerturbationWalk[tuple[Any, Any]]) -> AppliedPerturbation:
+    def apply_heuristic(self, graph: nx.Graph[Any], heuristic: PerturbationHeuristic[tuple[Any, Any]]) -> AppliedPerturbation:
             edges = set[tuple[tuple[Any, Any], tuple[Any, Any]]]()
     
             if self.add_num is None:
-                raise ValueError("The number of edges must be provided to apply the perturbation based on a walk.")
+                raise ValueError("The number of edges must be provided to apply the perturbation based on a heuristic.")
     
             for _ in range(self.add_num):
-                edge = walk.current()
+                edge = heuristic.current()
                 edges.add(edge)
 
             working_graph = graph.copy()
@@ -347,7 +347,7 @@ class EdgePerturbation(Perturbation):
             removed_edges, added_edges = self._get_change_info(graph, working_graph)
             return AppliedPerturbation(
                 self,
-                walk,
+                heuristic,
                 working_graph,
                 {
                     "removed_edges": removed_edges,

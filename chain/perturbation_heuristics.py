@@ -1,22 +1,27 @@
-import random
+from __future__ import annotations
+
+import random, graphviz
 import networkx as nx
 
 from math import sqrt
 from copy import deepcopy
+from datetime import datetime
+from .mcts_tree import MCTSTree
 from typing import Any, Callable
-from interfaces import PerturbationWalk, PerturbationChain
+from interfaces import LabelingFunction
+from interfaces import Perturbation, PerturbationHeuristic, PerturbationChain, AppliedPerturbation
 
-class NaturalOrderNodePerturbationWalk(PerturbationWalk[Any]):
+class NaturalOrderNodePerturbationHeuristic(PerturbationHeuristic[Any]):
     def __init__(self) -> None:
         self.traversed_nodes: list[Any] = []
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[Any] | None:
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
         candidate_nodes = sorted([n for n in list(graph.nodes) if n not in self.traversed_nodes])
 
         if len(candidate_nodes) > 0:
-            new_walk = deepcopy(self)
-            new_walk.traversed_nodes.append(candidate_nodes[0])
-            return new_walk
+            new_heuristic = deepcopy(self)
+            new_heuristic.traversed_nodes.append(candidate_nodes[0])
+            return new_heuristic
         else:
             return None
  
@@ -32,18 +37,21 @@ class NaturalOrderNodePerturbationWalk(PerturbationWalk[Any]):
 
             self.traversed_nodes.clear()
             self.traversed_nodes.append(node)
+    
+    def add(self, element: Any) -> None:
+        self.traversed_nodes.append(element)
 
-class NaturalOrderEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
+class NaturalOrderEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
     def __init__(self) -> None:
         self.traversed_edges: list[tuple[Any, Any]] = []
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[tuple[Any, Any]] | None:
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
         candidate_edges = sorted([e for e in list(graph.edges) if e not in self.traversed_edges], key = lambda x: x[0])
 
         if len(candidate_edges) > 0:
-            new_walk = deepcopy(self)
-            new_walk.traversed_edges.append(candidate_edges[0])
-            return new_walk
+            new_heuristic = deepcopy(self)
+            new_heuristic.traversed_edges.append(candidate_edges[0])
+            return new_heuristic
         else:
             return None
             
@@ -60,6 +68,9 @@ class NaturalOrderEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
             self.traversed_edges.clear()
             self.traversed_edges.append(edge)
 
+    def add(self, element: tuple[Any, Any]) -> None:
+        self.traversed_edges.append(element)
+
 node_perturbation_types: set[str] = {
     'removed_nodes'
 }
@@ -70,16 +81,16 @@ def node_graph_distance(a: Any, b: Any, graph: nx.Graph[Any]) -> float:
 def node_euclidean_distance(a: Any, b: Any, graph: nx.Graph[Any]) -> float:
     return abs(float(b) - float(a))
 
-class ProximityNodePerturbationWalk(PerturbationWalk[Any]):
+class ProximityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
     def __init__(self, graph: nx.Graph[Any], distance_func: Callable[[Any, Any, nx.Graph[Any]], float] = node_graph_distance) -> None:
         self.graph = graph.copy()
         self.traversed_nodes: list[Any] = []
         self.distance_func = distance_func
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[Any] | None:
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
         perturbed_nodes_raw: list[dict[str, Any]] = []
         
-        new_walk = deepcopy(self)
+        new_heuristic = deepcopy(self)
         candidate_nodes = [n for n in list(graph.nodes) if n not in self.traversed_nodes]
         
         for perturbation in reversed(chain):
@@ -89,8 +100,8 @@ class ProximityNodePerturbationWalk(PerturbationWalk[Any]):
 
         if len(perturbed_nodes_raw) == 0:
             if len(candidate_nodes) > 0:
-                new_walk.traversed_nodes.append(candidate_nodes[0])
-                return new_walk
+                new_heuristic.traversed_nodes.append(candidate_nodes[0])
+                return new_heuristic
             else:
                 return None
 
@@ -103,8 +114,8 @@ class ProximityNodePerturbationWalk(PerturbationWalk[Any]):
         )
         
         if len(candidate_nodes) > 0:
-            new_walk.traversed_nodes.append(candidate_nodes[0])
-            return new_walk
+            new_heuristic.traversed_nodes.append(candidate_nodes[0])
+            return new_heuristic
         else:
             return None
 
@@ -120,6 +131,9 @@ class ProximityNodePerturbationWalk(PerturbationWalk[Any]):
             
             self.traversed_nodes.clear()
             self.traversed_nodes.append(node)
+
+    def add(self, element: Any) -> None:
+        self.traversed_nodes.append(element)
 
 edge_perturbation_types: set[str] = {
     'added_edges',
@@ -137,16 +151,16 @@ def edge_euclidean_distance(a: tuple[Any, Any], b: tuple[Any, Any], graph: nx.Gr
     b_v = float(b[1])
     return sqrt(((b_u - a_u) * (b_u - a_u)) + ((b_v - a_v) * (b_v - a_v)))
 
-class ProximityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
+class ProximityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
     def __init__(self, graph: nx.Graph[Any], distance_func: Callable[[tuple[Any, Any], tuple[Any, Any], nx.Graph[Any]], float] = edge_graph_distance) -> None:
         self.graph = graph.copy()
         self.traversed_edges: list[tuple[Any, Any]] = []
         self.distance_func = distance_func
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[tuple[Any, Any]] | None:
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
         perturbed_edges_raw: list[dict[str, Any]] = []
 
-        new_walk = deepcopy(self)
+        new_heuristic = deepcopy(self)
         candidate_edges = [e for e in list(graph.edges) if e not in self.traversed_edges]
         
         for perturbation in reversed(chain):
@@ -156,8 +170,8 @@ class ProximityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
                     
         if len(perturbed_edges_raw) == 0:
             if len(candidate_edges) > 0:
-                new_walk.traversed_edges.append(candidate_edges[0])
-                return new_walk
+                new_heuristic.traversed_edges.append(candidate_edges[0])
+                return new_heuristic
             else:
                 return None
 
@@ -170,8 +184,8 @@ class ProximityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
         )
         
         if len(candidate_edges) > 0:
-            new_walk.traversed_edges.append(candidate_edges[0])
-            return new_walk
+            new_heuristic.traversed_edges.append(candidate_edges[0])
+            return new_heuristic
         else:
             return None
 
@@ -189,12 +203,15 @@ class ProximityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
             self.traversed_edges.clear()
             self.traversed_edges.append(edge)
 
-class CentralityNodePerturbationWalk(PerturbationWalk[Any]):
+    def add(self, element: tuple[Any, Any]) -> None:
+        self.traversed_edges.append(element)
+
+class CentralityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
     def __init__(self, graph: nx.Graph[Any]):
         self.traversed_nodes: list[Any] = []
         self.initial_centrality = nx.betweenness_centrality(graph)
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[Any] | None:
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
         centrality = nx.edge_betweenness_centrality(graph)
         candidate_nodes: list[tuple[Any, float]] = []
 
@@ -205,9 +222,9 @@ class CentralityNodePerturbationWalk(PerturbationWalk[Any]):
         candidate_nodes.sort(key = lambda x: x[1], reverse = True)
 
         if len(candidate_nodes) > 0:
-            new_walk = deepcopy(self)
-            new_walk.traversed_nodes.append(candidate_nodes[0])
-            return new_walk
+            new_heuristic = deepcopy(self)
+            new_heuristic.traversed_nodes.append(candidate_nodes[0])
+            return new_heuristic
         else:
             return None
 
@@ -224,12 +241,15 @@ class CentralityNodePerturbationWalk(PerturbationWalk[Any]):
             self.traversed_nodes.clear()
             self.traversed_nodes.append(node)
 
-class CentralityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
+    def add(self, element: Any) -> None:
+        self.traversed_nodes.append(element)
+
+class CentralityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
     def __init__(self, graph: nx.Graph[Any]):
         self.traversed_edges: list[tuple[Any, Any]] = []
         self.initial_centrality = nx.edge_betweenness_centrality(graph)
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[tuple[Any, Any]] | None:
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
         centrality = nx.edge_betweenness_centrality(graph)
         candidate_edges: list[tuple[tuple[Any, Any], float]] = []
 
@@ -240,9 +260,9 @@ class CentralityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
         candidate_edges.sort(key = lambda x: x[1], reverse = True)
 
         if len(candidate_edges) > 0:
-            new_walk = deepcopy(self)
-            new_walk.traversed_edges.append(candidate_edges[0][0])
-            return new_walk
+            new_heuristic = deepcopy(self)
+            new_heuristic.traversed_edges.append(candidate_edges[0][0])
+            return new_heuristic
         else:
             return None
 
@@ -259,15 +279,18 @@ class CentralityEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
             self.traversed_edges.clear()
             self.traversed_edges.append(edge)
 
-class ConnectedComponentsNodePerturbationWalk(PerturbationWalk[Any]):
+    def add(self, element: tuple[Any, Any]) -> None:
+        self.traversed_edges.append(element)
+
+class ConnectedComponentsNodePerturbationHeuristic(PerturbationHeuristic[Any]):
     def __init__(self):
         self.traversed_nodes: list[Any] = []
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[Any] | None:
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
         last_perturbed_node = None
         last_perturbed_graph = graph
         candidate_nodes = [n for n in list(graph.nodes) if n not in self.traversed_nodes]
-        new_walk = deepcopy(self)
+        new_heuristic = deepcopy(self)
         
         for perturbation in reversed(chain):
             for perturbation_type in edge_perturbation_types:
@@ -279,8 +302,8 @@ class ConnectedComponentsNodePerturbationWalk(PerturbationWalk[Any]):
 
         if last_perturbed_node is None:
             if len(candidate_nodes) > 0:
-                new_walk.traversed_nodes.append(candidate_nodes[0])
-                return new_walk
+                new_heuristic.traversed_nodes.append(candidate_nodes[0])
+                return new_heuristic
             else:
                 return None
 
@@ -291,8 +314,8 @@ class ConnectedComponentsNodePerturbationWalk(PerturbationWalk[Any]):
             return None
 
         node_distances = {n: node_graph_distance(last_perturbed_node, n, last_perturbed_graph) for n in candidate_nodes}
-        new_walk.traversed_nodes.append(min(candidate_nodes, key = lambda n: node_distances[n]))
-        return new_walk
+        new_heuristic.traversed_nodes.append(min(candidate_nodes, key = lambda n: node_distances[n]))
+        return new_heuristic
 
     def current(self) -> Any:
         return self.traversed_nodes[-1]
@@ -307,7 +330,10 @@ class ConnectedComponentsNodePerturbationWalk(PerturbationWalk[Any]):
             self.traversed_nodes.clear()
             self.traversed_nodes.append(node)
 
-class ConnectedComponentsEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
+    def add(self, element: Any) -> None:
+        self.traversed_nodes.append(element)
+
+class ConnectedComponentsEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
     def __init__(self):
         self.traversed_edges: list[tuple[Any, Any]] = []
 
@@ -333,11 +359,11 @@ class ConnectedComponentsEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]])
         edge = min(edge_distances.keys(), key = lambda e: (-edge_weights[e], edge_distances[e]))
         return edge, edge_weights[edge]
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[tuple[Any, Any]] | None:
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
         last_perturbed_edge = None
         last_perturbed_graph = graph
         candidate_edges = [e for e in list(graph.edges) if e not in self.traversed_edges]
-        new_walk = deepcopy(self)
+        new_heuristic = deepcopy(self)
         
         for perturbation in reversed(chain):
             for perturbation_type in edge_perturbation_types:
@@ -349,8 +375,8 @@ class ConnectedComponentsEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]])
 
         if last_perturbed_edge is None:
             if len(candidate_edges) > 0:
-                new_walk.traversed_edges.append(candidate_edges[0])
-                return new_walk
+                new_heuristic.traversed_edges.append(candidate_edges[0])
+                return new_heuristic
             else:
                 return None
         
@@ -367,16 +393,16 @@ class ConnectedComponentsEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]])
 
                 if weight_v > weight:
                     edge = edge_v
-            new_walk.traversed_edges.append(edge)
+            new_heuristic.traversed_edges.append(edge)
         elif result_v is not None:
             edge, _ = result_v
-            new_walk.traversed_edges.append(edge)
+            new_heuristic.traversed_edges.append(edge)
         else:
             if len(candidate_edges) > 0:
-                new_walk.traversed_edges.append(candidate_edges[0])
+                new_heuristic.traversed_edges.append(candidate_edges[0])
             else:
-                new_walk = None
-        return new_walk
+                new_heuristic = None
+        return new_heuristic
 
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
@@ -391,17 +417,20 @@ class ConnectedComponentsEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]])
             self.traversed_edges.clear()
             self.traversed_edges.append(edge)
 
-class RandomNodePerturbationWalk(PerturbationWalk[Any]):
+    def add(self, element: tuple[Any, Any]) -> None:
+        self.traversed_edges.append(element)
+
+class RandomNodePerturbationHeuristic(PerturbationHeuristic[Any]):
     def __init__(self) -> None:
         self.traversed_nodes: list[Any] = []
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[Any] | None:
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
         candidate_nodes = sorted([n for n in list(graph.nodes) if n not in self.traversed_nodes])
 
         if len(candidate_nodes) > 0:
-            new_walk = deepcopy(self)
-            new_walk.traversed_nodes.append(random.choice(candidate_nodes))
-            return new_walk
+            new_heuristic = deepcopy(self)
+            new_heuristic.traversed_nodes.append(random.choice(candidate_nodes))
+            return new_heuristic
         else:
             return None
  
@@ -418,17 +447,20 @@ class RandomNodePerturbationWalk(PerturbationWalk[Any]):
             self.traversed_nodes.clear()
             self.traversed_nodes.append(node)
 
-class RandomEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
+    def add(self, element: Any) -> None:
+        self.traversed_nodes.append(element)
+
+class RandomEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
     def __init__(self) -> None:
         self.traversed_edges: list[tuple[Any, Any]] = []
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationWalk[tuple[Any, Any]] | None:
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
         candidate_edges = sorted([e for e in list(graph.edges) if e not in self.traversed_edges], key = lambda x: x[0])
 
         if len(candidate_edges) > 0:
-            new_walk = deepcopy(self)
-            new_walk.traversed_edges.append(random.choice(candidate_edges))
-            return new_walk
+            new_heuristic = deepcopy(self)
+            new_heuristic.traversed_edges.append(random.choice(candidate_edges))
+            return new_heuristic
         else:
             return None
             
@@ -444,3 +476,120 @@ class RandomEdgePerturbationWalk(PerturbationWalk[tuple[Any, Any]]):
             
             self.traversed_edges.clear()
             self.traversed_edges.append(edge)
+
+    def add(self, element: tuple[Any, Any]) -> None:
+        self.traversed_edges.append(element)
+
+class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
+    def __init__(
+        self,
+        graph: nx.Graph[Any],
+        labeling_functions: list[LabelingFunction],
+        expansion_heuristics: dict[Perturbation, PerturbationHeuristic[Any]],
+        test_perturbation: Callable[[Perturbation, PerturbationHeuristic[Any], PerturbationChain, nx.Graph[Any], bool], AppliedPerturbation | None],
+        max_length: int = 4,
+        max_training_iterations: int = 100,
+        mcts_exploration_param: float = sqrt(2.0),
+        visualize_tree: bool = False,
+        ordered: bool = False
+    ) -> None:
+        self.graph = graph
+        self.test_perturbation = test_perturbation
+        self.labeling_functions = labeling_functions
+
+        self.max_length = max_length
+        self.max_training_iterations = max_training_iterations
+
+        self.tree = MCTSTree(
+            None,
+            PerturbationChain([]),
+            expansion_heuristics,
+            graph,
+            mcts_exploration_param
+        )
+        self.ordered = ordered
+        self.chains = self._train_tree(self.tree)
+        self.traversed_nodes: dict[int, list[MCTSTree]] = {}
+
+        print(f'Found {len(self.chains)} chains during training{":" if len(self.chains) > 0 else "."}')
+        print(self.chains)
+
+        if visualize_tree:
+            self._visualize_tree(self.tree)
+
+    def get_found_chains(self) -> set[PerturbationChain]:
+        return self.chains
+
+    def _train_tree(self, tree: MCTSTree) -> set[PerturbationChain]:
+        chains: set[PerturbationChain] = set()
+        
+        for _ in range(self.max_training_iterations):
+            node = tree
+            
+            while not node.is_leaf() and node.is_expanded():
+                node = node.best_child()
+        
+            if not node.is_leaf() and not node.is_expanded():
+                node.expand()
+
+            if len(node.children) > 0:
+                node = node.children[-1]
+
+            valid_chain = node.simulate(
+                self.graph,
+                self.labeling_functions,
+                self.test_perturbation,
+                random.randint(2, self.max_length),
+                chains,
+                self.ordered
+            )
+            node.backpropagate(valid_chain)
+        return chains
+
+    def _visualize_tree(self, tree: MCTSTree) -> None:
+        dot = graphviz.Graph(f'MCTS_{datetime.now().strftime("%Y%m%d_%H%M%S")}', format = 'png')
+        tree.visualize(dot)
+        dot.render(directory = 'visualizations')
+
+    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> MCTSPerturbationHeuristic | None:
+        node = self.tree
+
+        for perturbation in chain:
+            for child in node.children:
+                if perturbation == child.chain[-1]:
+                    node = child
+
+        candidate_nodes = node.children
+
+        if len(chain) in self.traversed_nodes:
+            candidate_nodes = [child for child in candidate_nodes if child not in self.traversed_nodes[len(chain)]]
+
+        if len(candidate_nodes) < 1:
+            return None
+
+        new_heuristic = deepcopy(self)
+        candidate_nodes.sort(key = lambda c: c.num_simulations, reverse = True)
+        selected_node = candidate_nodes[0]
+
+        if len(chain) in self.traversed_nodes:
+            new_heuristic.traversed_nodes[len(chain)].append(selected_node)
+        else:
+            new_heuristic.traversed_nodes[len(chain)] = [selected_node]
+        return new_heuristic
+
+    def current(self) -> AppliedPerturbation:
+        return self.traversed_nodes[max(self.traversed_nodes.keys())][-1].chain[-1]
+
+    def reset(self) -> None:
+        self.traversed_nodes = {}
+
+    def soft_reset(self) -> None:
+        items = list(self.traversed_nodes.items())
+        
+        if len(items) > 1:
+            items.sort(key = lambda i: i[0])
+            last_item = (items[-1][0], items[-1][1][-1])
+            self.traversed_nodes = {last_item[0]: [last_item[1]]}
+
+    def add(self, element: AppliedPerturbation) -> None:
+        raise NotImplementedError('Method is not implemented for this class.')
