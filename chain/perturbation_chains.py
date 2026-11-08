@@ -44,13 +44,9 @@ class BasePerturbationChain(PerturbationChain):
 
             # Check for label changes
             candidate_result = compute_labels(out.graph, labeling_functions)
-            candidate_labels = candidate_result.node_labels
-            changed_nodes = {
-                node: (original_result.node_labels.get(node), candidate_labels[node])
-                for node in candidate_labels if candidate_labels[node] != original_result.node_labels.get(node)
-            }
+            changed_nodes, changed_edges, changed_graphs = self.get_changes(original_result, candidate_result)
 
-            if changed_nodes:
+            if changed_nodes or changed_edges or changed_graphs:
                 result = desired_result
             else:
                 result = not desired_result
@@ -67,7 +63,6 @@ class BasePerturbationChain(PerturbationChain):
         desired_result: bool = False
     ) -> AppliedPerturbation | None:
         result = False
-        changed_nodes: dict[int, tuple[Any, Any]] | None = None
 
         if index >= len(self):
             raise ValueError('Perturbation index out of bounds.')
@@ -81,13 +76,9 @@ class BasePerturbationChain(PerturbationChain):
 
         # Check for label changes
         candidate_result = compute_labels(out.graph, labeling_functions)
-        candidate_labels = candidate_result.node_labels
-        changed_nodes = {
-            node: (original_result.node_labels.get(node), candidate_labels[node])
-            for node in candidate_labels if candidate_labels[node] != original_result.node_labels.get(node)
-        }
+        changed_nodes, changed_edges, changed_graphs = self.get_changes(original_result, candidate_result)
 
-        if changed_nodes:
+        if changed_nodes or changed_edges or changed_graphs:
             result = desired_result
         else:
             result = not desired_result
@@ -142,7 +133,7 @@ class BasePerturbationChain(PerturbationChain):
                         return False
         return len(self) > 1
 
-    def check_chain_validity(self, graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
+    def _check_chain_validity(self, graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
         result = None
         acc_graph = graph
 
@@ -157,4 +148,4 @@ class BasePerturbationChain(PerturbationChain):
         return (result is not None)
 
     def is_valid(self, graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
-        return self.check_chain_validity(graph, labeling_functions) and self.check_subchain_validity(graph, labeling_functions)
+        return self._check_chain_validity(graph, labeling_functions) and self.check_subchain_validity(graph, labeling_functions)

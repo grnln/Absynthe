@@ -6,6 +6,7 @@ import networkx as nx
 from typing import Any
 from abc import abstractmethod
 from .perturbation import Perturbation
+from .labeling_result import LabelingResult
 from .labeling_function import LabelingFunction
 from .applied_perturbation import AppliedPerturbation
 from .perturbation_heuristic import PerturbationHeuristic
@@ -60,6 +61,27 @@ class PerturbationChain(abc.ABC):
     def clear(self) -> None:
         self.perturbations.clear()
 
+    def get_changes(
+        self,
+        original_result: LabelingResult,
+        candidate_result: LabelingResult
+    ) -> tuple[dict[Any, tuple[Any, Any]], dict[tuple[Any, Any], tuple[Any, Any]], dict[Any, tuple[Any, Any]]]:
+        changed_nodes = {
+            node: (original_result.node_labels[node], candidate_result.node_labels[node])
+            for node in candidate_result.node_labels if candidate_result.node_labels[node] != original_result.node_labels[node]
+        }
+
+        changed_edges = {
+            edge: (original_result.edge_labels[edge], candidate_result.edge_labels[edge])
+            for edge in candidate_result.edge_labels if candidate_result.edge_labels[edge] != original_result.edge_labels[edge]
+        }
+
+        changed_graphs = {
+            graph: (original_result.graph_labels[graph], candidate_result.graph_labels[graph])
+            for graph in candidate_result.graph_labels if candidate_result.graph_labels[graph] != original_result.graph_labels[graph]
+        }
+        return (changed_nodes, changed_edges, changed_graphs)
+
     @abstractmethod
     def test_potential_perturbation(
         self,
@@ -83,10 +105,6 @@ class PerturbationChain(abc.ABC):
 
     @abstractmethod
     def check_subchain_validity(self, original_graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
-        pass
-
-    @abstractmethod
-    def check_chain_validity(self, graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
         pass
 
     @abstractmethod
