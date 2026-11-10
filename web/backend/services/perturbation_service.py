@@ -15,7 +15,7 @@ from web.backend.models.perturbation_models import (
     TripleChange,
 )
 from web.backend.services import graph_store, serialization
-from web.backend.services.registry import build_labeling_functions, build_perturbation
+from web.backend.services.registry import build_labeling_functions, build_perturbation, count_spec
 
 
 def _apply_observed_labels(graph, labelers: List[LabelingFunction]) -> None:
@@ -76,7 +76,8 @@ def _map_edge_info(changes: dict) -> Dict[str, EdgePerturbInfo]:
 def apply(request: PerturbationRequest) -> PerturbationResponse:
     """Apply configured perturbations and return preview diff payloads."""
     from graph.perturbation_engine import PerturbationPipeline
-    from utils.rng import set_seed, reset_rng
+    from utils.distributions import resolve_count
+    from utils.rng import get_rng, set_seed, reset_rng
 
     if request.seed is not None:
         set_seed(request.seed)
@@ -94,8 +95,13 @@ def apply(request: PerturbationRequest) -> PerturbationResponse:
         primary_preview = None
 
         for idx, perturb_config in enumerate(request.perturbations):
+            # The preview works on a single graph: sample the count once here
+            # so the reported desired_count matches what the pipeline targets.
+            desired_count = resolve_count(
+                count_spec(perturb_config.count, perturb_config.count_distribution), get_rng()
+            )
             pipeline = PerturbationPipeline(
-                perturbations=[(build_perturbation(perturb_config), perturb_config.count)],
+                perturbations=[(build_perturbation(perturb_config), desired_count)],
                 labeling_functions=labelers,
                 max_iterations=request.max_iterations,
             )
@@ -123,7 +129,7 @@ def apply(request: PerturbationRequest) -> PerturbationResponse:
             preview = PerturbationPreview(
                 config_index=idx,
                 perturbation_type=perturb_config.type,
-                desired_count=perturb_config.count,
+                desired_count=desired_count,
                 success=success,
                 message=message,
                 original_elements=original_elements,

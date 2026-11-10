@@ -5,7 +5,7 @@ from typing import Tuple
 
 from web.backend.models.graph_models import GraphGenerateRequest, GraphStats
 from web.backend.services import graph_store, serialization
-from web.backend.services.registry import normalize_composition_params
+from web.backend.services.registry import build_graph_kwargs
 
 
 def generate(request: GraphGenerateRequest) -> Tuple[str, list, GraphStats]:
@@ -17,25 +17,18 @@ def generate(request: GraphGenerateRequest) -> Tuple[str, list, GraphStats]:
         set_seed(request.seed)
 
     try:
-        from utils.distributions import IntDistribution, sample_int
+        from utils.distributions import resolve_count, to_distribution
         from utils.rng import get_rng
 
         rng = get_rng()
         motif_lists = []
         for m in request.motifs:
-            if m.count_distribution:
-                dist = IntDistribution(type=m.count_distribution.type, params=dict(m.count_distribution.params))
-                n = sample_int(dist, rng)
-            else:
-                n = m.count
+            dist = to_distribution(m.count_distribution)
+            n = resolve_count(dist if dist is not None else m.count, rng)
             motif_lists.extend([m.to_list()] * n)
         generator = MotifComposite(motifs=motif_lists)
-        graph = generator.generate_graph(
-            num_extra_vertices=request.num_extra_vertices,
-            num_extra_edges=request.num_extra_edges,
-            composition=request.composition,
-            composition_params=normalize_composition_params(request.composition_params),
-        )
+        # Extras given as distributions are sampled inside generate_graph
+        graph = generator.generate_graph(**build_graph_kwargs(request))
     finally:
         if request.seed is not None:
             reset_rng()

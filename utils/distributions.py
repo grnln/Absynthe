@@ -11,12 +11,16 @@ Usage::
     dist = IntDistribution(type="normal", params={"mean": 4, "std": 1})
     value = sample_int(dist, get_rng())          # integer >= 1
     value = sample_int(dist, get_rng(), min_value=0)  # integer >= 0
+
+    # Fields that accept either a fixed int or a distribution (``CountSpec``)
+    resolve_count(3, get_rng())                  # -> 3
+    resolve_count(dist, get_rng(), min_value=0)  # -> a fresh sample
 """
 
 import math
 import random
 from dataclasses import dataclass, field
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 
 @dataclass
@@ -32,6 +36,38 @@ class IntDistribution:
 
     type: str
     params: Dict[str, float] = field(default_factory=dict)
+
+
+# A count that is either fixed (int) or re-sampled from a distribution.
+CountSpec = Union[int, IntDistribution]
+
+
+def to_distribution(value) -> Optional[IntDistribution]:
+    """Coerce an ``IntDistribution``, a ``{"type", "params"}`` mapping or an
+    object with ``type``/``params`` attributes (e.g. a pydantic model) into an
+    ``IntDistribution``. ``None`` stays ``None``."""
+    if value is None or isinstance(value, IntDistribution):
+        return value
+    if isinstance(value, dict):
+        return IntDistribution(type=value["type"], params=dict(value.get("params") or {}))
+    return IntDistribution(type=value.type, params=dict(value.params or {}))
+
+
+def resolve_count(
+    spec: CountSpec,
+    rng: Union[random.Random, "module"],
+    min_value: int = 1,
+) -> int:
+    """Return *spec* itself when it is an int, otherwise sample it.
+
+    Lets a configuration field hold either a fixed count or an
+    :class:`IntDistribution` that is re-sampled on every call (per graph).
+    """
+    if isinstance(spec, IntDistribution):
+        return sample_int(spec, rng, min_value=min_value)
+    if isinstance(spec, dict):
+        return sample_int(to_distribution(spec), rng, min_value=min_value)
+    return max(min_value, int(spec))
 
 
 def _sample_poisson(lam: float, rng: Union[random.Random, "module"]) -> int:

@@ -130,9 +130,9 @@ def _datasets_from_json(path: str | Path) -> tuple[List[Dict[str, Any]], int | N
     from utils.dataset_config import load_dataset_config
     from web.backend.services.registry import (
         build_graph_generator,
+        build_graph_kwargs,
         build_labeling_functions,
         build_perturbations,
-        normalize_composition_params,
     )
 
     suite = load_dataset_config(path)
@@ -153,13 +153,9 @@ def _datasets_from_json(path: str | Path) -> tuple[List[Dict[str, Any]], int | N
             "config": request.model_dump(mode="json"),
             "seed": request.seed,
             "config_path": config_path,
-            "gen_kwargs": {
-                "num_graphs": request.num_graphs,
-                "num_extra_vertices": request.num_extra_vertices,
-                "num_extra_edges": request.num_extra_edges,
-                "composition": request.composition,
-                "composition_params": normalize_composition_params(request.composition_params),
-            },
+            # Extras with a `*_distribution` in the JSON arrive here as
+            # IntDistribution objects and are re-sampled for every graph.
+            "gen_kwargs": {"num_graphs": request.num_graphs, **build_graph_kwargs(request)},
         })
     return datasets, suite.seed, suite.clean_output
 

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from graph.exporters import DEFAULT_FORMATS
 
-from web.backend.models.graph_models import LabelingFunctionConfig, MotifConfig
+from web.backend.models.graph_models import ExtrasMixin, LabelingFunctionConfig, MotifConfig
 from web.backend.models.perturbation_models import PerturbationConfig
 
 
@@ -41,15 +41,13 @@ class KGSchemaConfig(BaseModel):
     allow_self_loops: bool = False
 
 
-class DatasetGenerateRequest(BaseModel):
+class DatasetGenerateRequest(ExtrasMixin):
     num_graphs: int = Field(..., ge=1, le=10000)
     motifs: Optional[List[MotifConfig]] = None
     folder_source: Optional[FolderSourceConfig] = None
     kg_schema: Optional[KGSchemaConfig] = None
     composition: str = "sequential"
     composition_params: Dict[str, Any] = Field(default_factory=dict)
-    num_extra_vertices: int = Field(0, ge=0)
-    num_extra_edges: int = Field(0, ge=0)
     labeling_functions: List[LabelingFunctionConfig] = Field(default_factory=list)
     perturbations: List[PerturbationConfig] = Field(default_factory=list)
     max_perturbation_iterations: int = Field(10, ge=1, le=200)

@@ -4,6 +4,7 @@ from motifs import motif_generators, motif_param_names
 from typing import List
 from collections import defaultdict
 from utils.graph_utils import add_vertices, add_random_edges
+from utils.distributions import CountSpec, resolve_count
 from utils.rng import get_rng
 from graph.composition_engine import compose_motifs
 
@@ -21,12 +22,20 @@ class MotifComposite(GraphGenerator):
         self.motifs = motifs or []
         self.generators = motif_generators
 
-    def generate_graph(self, num_extra_vertices: int = 0, num_extra_edges: int = 0, **kwargs) -> nx.Graph:
+    def generate_graph(
+        self,
+        num_extra_vertices: CountSpec = 0,
+        num_extra_edges: CountSpec = 0,
+        **kwargs,
+    ) -> nx.Graph:
         """Generate a composite graph by combining motifs from the list.
 
         Args:
-            num_extra_vertices (int): Number of additional vertices to add.
-            num_extra_edges (int): Number of additional edges to add randomly.
+            num_extra_vertices: Number of additional vertices to add. Either a
+                fixed int or an ``IntDistribution`` sampled on every call
+                (clamped to ``>= 0``), so each graph gets its own count.
+            num_extra_edges: Number of additional edges to add randomly; same
+                int-or-distribution semantics as ``num_extra_vertices``.
             **kwargs: Additional arguments (start, composition, composition_params).
 
         Returns:
@@ -76,11 +85,15 @@ class MotifComposite(GraphGenerator):
                 node2 = rng.choice(list(motif_node_sets[j]))
                 combined_graph.add_edge(node1, node2)
 
+        # Extras: fixed ints pass through, distributions are sampled per graph
+        n_vertices = resolve_count(num_extra_vertices, rng, min_value=0)
+        n_edges = resolve_count(num_extra_edges, rng, min_value=0)
+
         # Add extra vertices, each connected to a random existing node
-        combined_graph = add_vertices(combined_graph, num_extra_vertices, rng=rng)
+        combined_graph = add_vertices(combined_graph, n_vertices, rng=rng)
 
         # Add extra edges randomly
-        if num_extra_edges:
-            combined_graph = add_random_edges(combined_graph, num_edges=num_extra_edges, rng=rng)
+        if n_edges:
+            combined_graph = add_random_edges(combined_graph, num_edges=n_edges, rng=rng)
 
         return combined_graph

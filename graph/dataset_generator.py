@@ -15,6 +15,7 @@ from graph.dataset_metadata import (
 )
 from graph.exporters import FormatSpec, export_graph, resolve_exporters
 from graph.perturbation_engine import PerturbationPipeline
+from utils.distributions import CountSpec
 from utils.rng import get_seed
 from utils.kg_utils import (
     apply_labeling_result,
@@ -62,7 +63,7 @@ class GraphDatasetGenerator:
         self,
         graph_generator: GraphGenerator,
         labeling_functions: Optional[List[LabelingFunction]] = None,
-        perturbations: Optional[List[Tuple[Perturbation, int]]] = None,
+        perturbations: Optional[List[Tuple[Perturbation, CountSpec]]] = None,
         output_dir: str = "output",
         max_perturbation_iterations: int = 10,
         formats: Optional[Sequence[FormatSpec]] = None,
@@ -78,7 +79,8 @@ class GraphDatasetGenerator:
             perturbations: List of (Perturbation, desired_count) pairs.
                 Each perturbation is applied to the ORIGINAL graph up to
                 desired_count times, only accepting applications that
-                cause label changes.
+                cause label changes. desired_count is a fixed int or an
+                ``IntDistribution`` re-sampled for every base graph.
                 If None, no perturbations are applied.
             output_dir: Directory where the dataset will be saved.
             max_perturbation_iterations: Maximum total attempts per
@@ -222,7 +224,9 @@ class GraphDatasetGenerator:
                 after each base graph and its variants have been written,
                 with ``done`` in ``1..total``. Used for progress reporting.
             **graph_kwargs: Extra keyword arguments passed to
-                graph_generator.generate_graph().
+                graph_generator.generate_graph(). For motif generators
+                ``num_extra_vertices`` / ``num_extra_edges`` accept an int
+                or an ``IntDistribution`` sampled per graph.
 
         Returns:
             Metadata list with one entry per saved perturbed variant (the

@@ -23,12 +23,26 @@ class MotifConfig(BaseModel):
         return [self.type] + list(self.params)
 
 
-class GraphGenerateRequest(BaseModel):
+class ExtrasMixin(BaseModel):
+    """Extra vertices / edges added after composition: a fixed count or a
+    distribution sampled per graph (the distribution wins when present)."""
+
+    num_extra_vertices: int = Field(0, ge=0, description="Fixed number of extra vertices")
+    num_extra_vertices_distribution: Optional[IntDistributionModel] = Field(
+        None,
+        description="Random distribution for the extra-vertex count (overrides num_extra_vertices when present)",
+    )
+    num_extra_edges: int = Field(0, ge=0, description="Fixed number of extra edges")
+    num_extra_edges_distribution: Optional[IntDistributionModel] = Field(
+        None,
+        description="Random distribution for the extra-edge count (overrides num_extra_edges when present)",
+    )
+
+
+class GraphGenerateRequest(ExtrasMixin):
     motifs: List[MotifConfig] = Field(..., min_length=1)
     composition: str = "sequential"
     composition_params: Dict[str, Any] = Field(default_factory=dict)
-    num_extra_vertices: int = Field(0, ge=0)
-    num_extra_edges: int = Field(0, ge=0)
     seed: Optional[int] = None
 
 

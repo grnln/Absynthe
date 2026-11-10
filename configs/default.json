@@ -36,7 +36,6 @@
       "motifs": [
         {
           "type": "house",
-          "count": 1,
           "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 } }
         }
       ],
@@ -50,7 +49,6 @@
         {
           "type": "cycle",
           "params": [5],
-          "count": 1,
           "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 } }
         }
       ],
@@ -64,7 +62,6 @@
         {
           "type": "star",
           "params": [5],
-          "count": 1,
           "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 } }
         }
       ],
@@ -77,19 +74,16 @@
       "motifs": [
         {
           "type": "house",
-          "count": 1,
           "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 } }
         },
         {
           "type": "cycle",
           "params": [5],
-          "count": 1,
           "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 } }
         },
         {
           "type": "star",
           "params": [5],
-          "count": 1,
           "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 } }
         }
       ],

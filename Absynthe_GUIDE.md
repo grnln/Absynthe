@@ -423,6 +423,7 @@ graph_gen = MotifComposite(motifs=[["cycle", 4], ["house"], ["cycle", 3]])
 labeling = [MotifLabelingFunction(motif_order=["cycle_4", "house", "cycle_3"])]
 
 # 3. Perturbations: (perturbation_instance, desired_count)
+#    desired_count is an int, or an IntDistribution re-sampled per base graph (see §8)
 perturbations = [
     (RemoveNodesPerturbation(num_nodes=2, strategy="motif"), 2),
     (EdgePerturbation(p_remove=0.1), 1),
@@ -521,8 +522,8 @@ Two exporters must not share a name (or an extension, or they overwrite each oth
 
 - `seed` is the seed passed to `GraphDatasetGenerator(seed=...)`, or else the one last given to `utils.rng.set_seed` (`None` when unseeded). It is recorded, not applied: seed the RNG yourself as in §3.
 - `config` is the declarative configuration handed to `GraphDatasetGenerator(config=...)`; the scripts store the resolved JSON dataset entry and the web backend stores the request. It is `null` for datasets assembled programmatically, in which case `components` is the record to rely on.
-- `components` is always derived from the live objects: class, module and constructor arguments (`rng` excluded). A component may override this by implementing `describe() -> dict`.
-- `generation` keeps the `generate_dataset(...)` call and the export `formats` used (primary first). `provenance` is free-form (`GraphDatasetGenerator(provenance=...)`); the scripts use it to note the config file and the position of the dataset in its suite.
+- `components` is always derived from the live objects: class, module and constructor arguments (`rng` excluded). A component may override this by implementing `describe() -> dict`. A perturbation `count` given as a distribution is recorded as its `{"type", "params"}` dict.
+- `generation` keeps the `generate_dataset(...)` call and the export `formats` used (primary first). `graph_kwargs.num_extra_vertices` / `num_extra_edges` are likewise the distribution dict when they were sampled per graph. `provenance` is free-form (`GraphDatasetGenerator(provenance=...)`); the scripts use it to note the config file and the position of the dataset in its suite.
 - `generate_dataset` returns the variants list written to `metadata.json`; the `config.json` document is available as `generator.last_config`. `graph.dataset_metadata` offers `load_dataset_metadata(path)`, `load_dataset_config(path)` (both accept the dataset directory) and `find_variant(variants, graph_id)`.
 
 `metadata.json` is a list with one entry per perturbed variant:
@@ -556,7 +557,9 @@ Two exporters must not share a name (or an extension, or they overwrite each oth
 
 ---
 
-## 8. Dataset Generation with Random Motif Counts
+## 8. Dataset Generation with Random Counts
+
+Every count that shapes a dataset can be a fixed int or an `IntDistribution` that is re-sampled for each base graph: the number of motif instances, the number of label-changing variants each perturbation must produce, and the extra vertices / edges added after composition.
 
 Use `RandomMotifComposite` as the graph generator for datasets where each graph should have a different number of motif instances:
 
@@ -573,12 +576,48 @@ graph_gen = RandomMotifComposite(motif_configs=[
 generator = GraphDatasetGenerator(
     graph_generator=graph_gen,
     labeling_functions=[MotifLabelingFunction()],
-    perturbations=[(RemoveNodesPerturbation(num_nodes=1), 1)],
+    perturbations=[
+        # desired_count sampled per base graph: 1-3 node-removal variants
+        (RemoveNodesPerturbation(num_nodes=1), IntDistribution("uniform", {"min": 1, "max": 3})),
+        (EdgePerturbation(p_remove=0.1), 1),                               # always 1 variant
+    ],
     output_dir="datasets/variable_motifs",
 )
 
-metadata = generator.generate_dataset(num_graphs=50, composition="er", composition_params={"p": 0.3})
+metadata = generator.generate_dataset(
+    num_graphs=50,
+    composition="er",
+    composition_params={"p": 0.3},
+    # extras sampled per graph too (clamped to >= 0); plain ints still work
+    num_extra_vertices=IntDistribution("uniform", {"min": 0, "max": 4}),
+    num_extra_edges=IntDistribution("poisson", {"lambda": 1}),
+)
 ```
+
+`MotifComposite.generate_graph` accepts the same int-or-distribution values for `num_extra_vertices` / `num_extra_edges`, and `PerturbationPipeline` samples a distribution `desired_count` on every `apply_and_check` call (the value used is reported as `desired_count` in each result). `utils.distributions.resolve_count(spec, rng, min_value)` is the helper behind both: it returns ints untouched and samples distributions.
+
+In JSON suites and web requests the distribution lives in a sibling field that overrides the fixed one when present, exactly like `count_distribution` for motifs:
+
+| Field | Fixed | Per-graph distribution |
+|---|---|---|
+| motif instances | `motifs[].count` | `motifs[].count_distribution` |
+| variants per perturbation | `perturbations[].count` | `perturbations[].count_distribution` |
+| extra vertices | `num_extra_vertices` | `num_extra_vertices_distribution` |
+| extra edges | `num_extra_edges` | `num_extra_edges_distribution` |
+
+```json
+{
+  "num_extra_vertices_distribution": {"type": "uniform", "params": {"min": 0, "max": 4}},
+  "num_extra_edges_distribution": {"type": "poisson", "params": {"lambda": 1}},
+  "perturbations": [
+    {"type": "remove_nodes", "folder_name": "remove_nodes",
+     "count_distribution": {"type": "uniform", "params": {"min": 1, "max": 3}},
+     "params": {"num_nodes": 1, "strategy": "motif"}}
+  ]
+}
+```
+
+In the web GUI the dice button next to each count (Graph Builder extras, Perturbation Lab and Dataset Studio) switches between a fixed value and a distribution.
 
 ---
 

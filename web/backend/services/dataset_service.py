@@ -10,9 +10,9 @@ from graph.dataset_generator import GraphDatasetGenerator
 from web.backend.models.dataset_models import DatasetGenerateRequest, TaskStatus
 from web.backend.services.registry import (
     build_graph_generator,
+    build_graph_kwargs,
     build_labeling_functions,
     build_perturbations,
-    normalize_composition_params,
 )
 
 _tasks: Dict[str, dict] = {}
@@ -83,10 +83,7 @@ def run_generation(task_id: str, request: DatasetGenerateRequest) -> None:
         generator.generate_dataset(
             num_graphs=request.num_graphs,
             progress_callback=lambda done, _total: _update(task_id, current=done),
-            num_extra_vertices=request.num_extra_vertices,
-            num_extra_edges=request.num_extra_edges,
-            composition=request.composition,
-            composition_params=normalize_composition_params(request.composition_params),
+            **build_graph_kwargs(request),
         )
 
         _update(

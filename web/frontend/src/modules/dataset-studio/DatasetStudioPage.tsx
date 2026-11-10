@@ -30,6 +30,7 @@ import { Select } from '@/components/ui/Select'
 import { Slider } from '@/components/ui/Slider'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { Card, CardContent } from '@/components/ui/Card'
+import { CountInput } from '@/components/ui/CountInput'
 import { DistributionInput } from '@/components/ui/DistributionInput'
 import { useGraphState } from '@/hooks/useGraphState'
 
@@ -69,7 +70,9 @@ export function DatasetStudioPage() {
   const [composition, setComposition] = useState('sequential')
   const [compositionParams, setCompositionParams] = useState<Record<string, unknown>>({})
   const [extraV, setExtraV] = useState(0)
+  const [extraVDist, setExtraVDist] = useState<IntDistribution | undefined>(undefined)
   const [extraE, setExtraE] = useState(0)
+  const [extraEDist, setExtraEDist] = useState<IntDistribution | undefined>(undefined)
   const [labelingFunctions, setLabelingFunctions] = useState<LabelingFunctionConfig[]>(savedLabeling)
   const [perturbations, setPerturbations] = useState<PerturbationConfig[]>(savedPerturbations)
   const [maxPerturbIter, setMaxPerturbIter] = useState(10)
@@ -223,6 +226,12 @@ export function DatasetStudioPage() {
     )
   }
 
+  const updatePerturbCountDistribution = (idx: number, dist: IntDistribution | undefined) => {
+    setPerturbations((prev) =>
+      prev.map((cfg, i) => (i === idx ? { ...cfg, count_distribution: dist } : cfg)),
+    )
+  }
+
   const removePerturbation = (idx: number) => {
     setPerturbations((prev) => prev.filter((_, i) => i !== idx))
   }
@@ -253,6 +262,8 @@ export function DatasetStudioPage() {
               composition_params: compositionParams,
               num_extra_vertices: extraV,
               num_extra_edges: extraE,
+              ...(extraVDist && { num_extra_vertices_distribution: extraVDist }),
+              ...(extraEDist && { num_extra_edges_distribution: extraEDist }),
               labeling_functions: labelingFunctions,
               perturbations,
               max_perturbation_iterations: maxPerturbIter,
@@ -399,8 +410,26 @@ export function DatasetStudioPage() {
                   }
                 />
               ))}
-              <Slider label="Extra vertices" value={extraV} min={0} max={20} onValueChange={setExtraV} />
-              <Slider label="Extra edges" value={extraE} min={0} max={20} onValueChange={setExtraE} />
+              <CountInput
+                label="Extra vertices"
+                value={extraV}
+                distribution={extraVDist}
+                onValueChange={setExtraV}
+                onDistributionChange={setExtraVDist}
+                schemas={distributionSchemas}
+                min={0}
+                max={20}
+              />
+              <CountInput
+                label="Extra edges"
+                value={extraE}
+                distribution={extraEDist}
+                onValueChange={setExtraE}
+                onDistributionChange={setExtraEDist}
+                schemas={distributionSchemas}
+                min={0}
+                max={20}
+              />
             </div>
           </>
         )}
@@ -456,12 +485,15 @@ export function DatasetStudioPage() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <Slider
+                  <CountInput
                     label="Desired count"
                     value={cfg.count}
+                    distribution={cfg.count_distribution}
+                    onValueChange={(value) => updatePerturbCount(idx, value)}
+                    onDistributionChange={(dist) => updatePerturbCountDistribution(idx, dist)}
+                    schemas={distributionSchemas}
                     min={1}
                     max={10}
-                    onValueChange={(value) => updatePerturbCount(idx, value)}
                   />
                   {schema?.params.map((param) => (
                     param.type === 'select' ? (

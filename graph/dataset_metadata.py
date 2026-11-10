@@ -105,13 +105,14 @@ def describe_component(obj: Any) -> Dict[str, Any]:
 def describe_components(
     graph_generator: Any,
     labeling_functions: Iterable[Any],
-    perturbations: Iterable[Tuple[Any, int]],
+    perturbations: Iterable[Tuple[Any, Any]],
 ) -> Dict[str, Any]:
     return {
         "graph_generator": describe_component(graph_generator),
         "labeling_functions": [describe_component(lf) for lf in labeling_functions],
+        # ``count`` is an int, or the distribution dict when sampled per graph
         "perturbations": [
-            {**describe_component(p), "count": count} for p, count in perturbations
+            {**describe_component(p), "count": to_jsonable(count)} for p, count in perturbations
         ],
     }
 

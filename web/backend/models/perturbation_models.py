@@ -4,13 +4,18 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from web.backend.models.common import CytoscapeElement
+from web.backend.models.distribution_models import IntDistributionModel
 from web.backend.models.graph_models import LabelingFunctionConfig
 
 
 class PerturbationConfig(BaseModel):
     type: str
     params: Dict[str, Any] = Field(default_factory=dict)
-    count: int = Field(1, ge=1)
+    count: int = Field(1, ge=1, description="Fixed number of label-changing variants per base graph")
+    count_distribution: Optional[IntDistributionModel] = Field(
+        None,
+        description="Random distribution for the variant count, sampled per base graph (overrides count when present)",
+    )
     folder_name: Optional[str] = None
 
 

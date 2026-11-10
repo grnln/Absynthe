@@ -2,7 +2,9 @@ from typing import List, Tuple, Dict, Any, Optional
 
 from interfaces import Perturbation, LabelingFunction, PerturbationHint, GraphLike
 from interfaces.labeling_result import LabelingResult
+from utils.distributions import CountSpec, resolve_count
 from utils.kg_utils import unpack_ref
+from utils.rng import get_rng
 
 
 class PerturbationPipeline:
@@ -16,30 +18,41 @@ class PerturbationPipeline:
     desired count of successful (label-changing) applications is reached,
     or max_iterations total attempts are exhausted.
 
+    ``desired_count`` may be a fixed int or an ``IntDistribution``; in the
+    latter case it is re-sampled on every call to ``apply_and_check`` (i.e.
+    per base graph), mirroring the random motif counts of
+    ``RandomMotifComposite``.
+
     Each successful application produces an independent perturbed graph
     derived from the same original.
     """
 
     def __init__(
         self,
-        perturbations: List[Tuple[Perturbation, int]],
+        perturbations: List[Tuple[Perturbation, CountSpec]],
         labeling_functions: List[LabelingFunction],
         max_iterations: int = 10,
+        rng=None,
     ):
         """
         Args:
             perturbations: List of (perturbation_instance, desired_count) pairs.
                 For each pair, the pipeline will try to apply the perturbation
                 desired_count times successfully (i.e., causing label changes).
+                desired_count is an int or an ``IntDistribution`` sampled per
+                call (clamped to ``>= 1``).
             labeling_functions: List of labeling functions. Labels from
                 later functions overwrite labels from earlier ones for
                 the same node.
             max_iterations: Maximum total attempts per perturbation to find
                 applications that cause label changes.
+            rng: Random source used to sample distribution counts. Defaults
+                to the global RNG of ``utils.rng``.
         """
         self.perturbations = perturbations
         self.labeling_functions = labeling_functions
         self.max_iterations = max_iterations
+        self.rng = rng
 
     def _compute_labels(self, graph: GraphLike) -> LabelingResult:
         """Compute labels using all labeling functions.
@@ -132,11 +145,15 @@ class PerturbationPipeline:
             - 'labeling_result': full LabelingResult for the perturbed graph
             - 'original_labeling_result': full LabelingResult for the original graph
             - 'perturbation_folder': folder_name of the perturbation that produced this variant
+            - 'desired_count': the count targeted for this call (the sampled
+              value when the pair carries a distribution)
         """
         original_result = self._compute_labels(graph)
         results = []
+        rng = self.rng or get_rng()
 
-        for perturbation, desired_count in self.perturbations:
+        for perturbation, count_spec in self.perturbations:
+            desired_count = resolve_count(count_spec, rng, min_value=1)
             successes = 0
             attempts = 0
 
@@ -165,6 +182,7 @@ class PerturbationPipeline:
                         "labeling_result": candidate_result,
                         "original_labeling_result": original_result,
                         "perturbation_folder": perturbation.folder_name,
+                        "desired_count": desired_count,
                     })
 
         return results

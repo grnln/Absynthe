@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Tuple
 
 import web.backend.services  # noqa: F401
 from interfaces import LabelingFunction, Perturbation
+from utils.distributions import CountSpec, to_distribution
 from web.backend.models.graph_models import LabelingFunctionConfig
 from web.backend.models.perturbation_models import PerturbationConfig
 
@@ -343,6 +344,33 @@ def normalize_composition_params(params: Dict[str, Any] | None) -> Dict[str, Any
     return normalized
 
 
+def count_spec(fixed: int, distribution: Any = None) -> CountSpec:
+    """Pick the runtime count: the ``IntDistribution`` when a distribution
+    model is given (sampled per graph downstream), else the fixed int."""
+    dist = to_distribution(distribution)
+    return dist if dist is not None else fixed
+
+
+def build_graph_kwargs(request: Any) -> Dict[str, Any]:
+    """Keyword arguments for ``generate_graph`` / ``generate_dataset`` built
+    from a ``GraphGenerateRequest`` or ``DatasetGenerateRequest``.
+
+    ``num_extra_vertices`` / ``num_extra_edges`` become ``IntDistribution``
+    objects when the request carries ``*_distribution`` fields, so motif
+    generators re-sample them for every graph.
+    """
+    return {
+        "num_extra_vertices": count_spec(
+            request.num_extra_vertices, request.num_extra_vertices_distribution
+        ),
+        "num_extra_edges": count_spec(
+            request.num_extra_edges, request.num_extra_edges_distribution
+        ),
+        "composition": request.composition,
+        "composition_params": normalize_composition_params(request.composition_params),
+    }
+
+
 def build_labeling_functions(
     configs: List[LabelingFunctionConfig] | None,
 ) -> List[LabelingFunction]:
@@ -459,10 +487,15 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
 
 def build_perturbations(
     configs: List[PerturbationConfig] | None,
-) -> List[Tuple[Perturbation, int]]:
+) -> List[Tuple[Perturbation, CountSpec]]:
+    """``(perturbation, count)`` pairs; ``count`` is the ``IntDistribution``
+    when the config has ``count_distribution`` (sampled per base graph)."""
     if not configs:
         return []
-    return [(build_perturbation(cfg), cfg.count) for cfg in configs]
+    return [
+        (build_perturbation(cfg), count_spec(cfg.count, cfg.count_distribution))
+        for cfg in configs
+    ]
 
 
 def build_graph_generator(request: "DatasetGenerateRequest"):
@@ -501,19 +534,9 @@ def build_graph_generator(request: "DatasetGenerateRequest"):
 
     if any(m.count_distribution for m in request.motifs):
         from graph.random_motif_composite import RandomMotifComposite
-        from utils.distributions import IntDistribution
 
         motif_configs = [
-            (
-                m.to_list(),
-                m.count,
-                IntDistribution(
-                    type=m.count_distribution.type,
-                    params=dict(m.count_distribution.params),
-                )
-                if m.count_distribution
-                else None,
-            )
+            (m.to_list(), m.count, to_distribution(m.count_distribution))
             for m in request.motifs
         ]
         return RandomMotifComposite(motif_configs=motif_configs)
