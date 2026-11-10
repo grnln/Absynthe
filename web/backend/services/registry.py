@@ -136,7 +136,7 @@ DISTRIBUTION_SCHEMAS: List[Dict[str, Any]] = [
     {
         "type": "normal",
         "label": "Normal",
-        "description": "Bell curve around mean, clamped to >= 1",
+        "description": "Bell curve around mean, rounded to an integer (use min/max bounds to clip)",
         "params": [
             {"name": "mean", "label": "Mean", "type": "float", "default": 3.0, "min": 0.1},
             {"name": "std", "label": "Std Dev", "type": "float", "default": 1.0, "min": 0.1},

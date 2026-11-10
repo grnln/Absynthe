@@ -106,14 +106,14 @@ Every count in the config can be fixed or drawn from a distribution that is re-s
 ]
 ```
 
-| Field | Fixed | Per-graph distribution | Clamp |
+| Field | Fixed | Per-graph distribution | Default lower bound |
 |---|---|---|---|
-| motif instances | `motifs[].count` | `motifs[].count_distribution` | `>= 1` |
-| variants per perturbation | `perturbations[].count` | `perturbations[].count_distribution` | `>= 1` |
-| extra vertices | `num_extra_vertices` | `num_extra_vertices_distribution` | `>= 0` |
-| extra edges | `num_extra_edges` | `num_extra_edges_distribution` | `>= 0` |
+| motif instances | `motifs[].count` | `motifs[].count_distribution` | `1` |
+| variants per perturbation | `perturbations[].count` | `perturbations[].count_distribution` | `1` |
+| extra vertices | `num_extra_vertices` | `num_extra_vertices_distribution` | `0` |
+| extra edges | `num_extra_edges` | `num_extra_edges_distribution` | `0` |
 
-Supported distribution types are `uniform` (`min`, `max`), `normal` (`mean`, `std`) and `poisson` (`lambda`). The web GUI exposes the same choice through the dice button next to each count.
+Supported distribution types are `uniform` (`min`, `max`), `normal` (`mean`, `std`) and `poisson` (`lambda`). A distribution may also carry optional `min` / `max` bounds next to `type` and `params` (e.g. `{"type": "normal", "params": {"mean": 4, "std": 1}, "min": 2, "max": 6}`); samples are clipped into the range, and an explicit `min` replaces the default lower bound of the table. The web GUI exposes the same choice through the dice button next to each count.
 
 ### Knowledge-graph datasets
 

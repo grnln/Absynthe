@@ -5,7 +5,7 @@ specific domain concept.  Import ``IntDistributionModel`` wherever a
 configurable integer distribution is needed in an API request/response.
 """
 
-from typing import Any, Dict
+from typing import Dict, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -18,10 +18,17 @@ class IntDistributionModel(BaseModel):
     * ``"uniform"``  — requires ``min`` and ``max``
     * ``"normal"``   — requires ``mean`` and ``std``
     * ``"poisson"``  — requires ``lambda``
+
+    ``min`` / ``max`` (top level, not in ``params``) are optional bounds:
+    every sample is clipped into ``[min, max]``. Without ``min`` the lower
+    bound is the default of the field being sampled (1 for motif and
+    perturbation counts, 0 for extra vertices / edges).
     """
 
     type: str = Field(..., description="Distribution type: uniform | normal | poisson")
     params: Dict[str, float] = Field(default_factory=dict)
+    min: Optional[int] = Field(None, ge=0, description="Optional lower bound (clip); overrides the field default")
+    max: Optional[int] = Field(None, ge=0, description="Optional upper bound (clip)")
 
     @model_validator(mode="after")
     def validate_params(self) -> "IntDistributionModel":
@@ -44,4 +51,6 @@ class IntDistributionModel(BaseModel):
                 raise ValueError("'lambda' must be > 0")
         else:
             raise ValueError(f"Unknown distribution type: {t!r}")
+        if self.min is not None and self.max is not None and self.min > self.max:
+            raise ValueError("bound 'min' must be <= bound 'max'")
         return self

@@ -142,14 +142,25 @@ graph2 = gen.generate_graph(composition="sequential")
 | `normal`  | `mean`, `std`           | Gaussian, rounded to nearest integer |
 | `poisson` | `lambda`                | Poisson-distributed count            |
 
-All distributions clamp the result to `>= 1` by default. You can change the lower bound:
+### Bounds
+
+Every distribution accepts optional `min` / `max` bounds, set on the distribution itself (not inside `params`). Samples are **clipped**: a value outside the range is replaced by the nearest bound, so with tight bounds the mass piles up at the edges.
 
 ```python
 from utils.distributions import IntDistribution, sample_int
 from utils.rng import get_rng
 
-dist = IntDistribution("uniform", {"min": 0, "max": 10})
-value = sample_int(dist, get_rng(), min_value=0)  # allows 0
+# ~4 houses, never fewer than 2 nor more than 6
+dist = IntDistribution("normal", {"mean": 4, "std": 1}, min=2, max=6)
+value = sample_int(dist, get_rng())  # integer in [2, 6]
+```
+
+When `min` is not given, the lower bound is the default of the field being sampled: `1` for motif instances and perturbation counts, `0` for extra vertices / edges (this is the `min_value` argument of `sample_int` / `resolve_count`). Setting `min` explicitly overrides that default, so `min=0` on a motif lets some graphs carry no instance of it at all. Samples are never negative, and `min <= max` is required.
+
+The same two keys work in JSON suites and web requests:
+
+```json
+{"type": "poisson", "params": {"lambda": 2}, "min": 1, "max": 5}
 ```
 
 ---

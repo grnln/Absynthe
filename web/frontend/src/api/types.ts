@@ -69,6 +69,9 @@ export interface PerturbationSchema {
 export interface IntDistribution {
   type: 'uniform' | 'normal' | 'poisson'
   params: Record<string, number>
+  /** Optional bounds: samples are clipped into [min, max] */
+  min?: number
+  max?: number
 }
 
 export interface DistributionSchema {

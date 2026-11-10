@@ -46,6 +46,10 @@ def to_jsonable(value: Any) -> Any:
         return value
     if isinstance(value, enum.Enum):
         return value.value
+    # Objects that know their own JSON form (e.g. IntDistribution drops unset bounds)
+    custom = getattr(value, "to_dict", None)
+    if callable(custom) and not isinstance(value, type):
+        return to_jsonable(custom())
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {f.name: to_jsonable(getattr(value, f.name)) for f in dataclasses.fields(value)}
     if hasattr(value, "model_dump"):  # pydantic models

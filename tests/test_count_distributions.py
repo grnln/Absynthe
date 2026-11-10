@@ -59,6 +59,90 @@ def test_to_distribution_accepts_models_dicts_and_none():
     model = IntDistributionModel(type="uniform", params={"min": 1, "max": 3})
     assert to_distribution(model) == IntDistribution("uniform", {"min": 1, "max": 3})
 
+    # Bounds travel through both forms
+    assert to_distribution({"type": "poisson", "params": {"lambda": 2}, "min": 1, "max": 4}) == IntDistribution(
+        "poisson", {"lambda": 2}, min=1, max=4
+    )
+    bounded = IntDistributionModel(type="normal", params={"mean": 3, "std": 1}, max=5)
+    assert to_distribution(bounded) == IntDistribution("normal", {"mean": 3, "std": 1}, min=None, max=5)
+
+
+# ---------------------------------------------------------------------------
+# Optional min / max bounds (clipping)
+# ---------------------------------------------------------------------------
+
+def test_bounds_clip_samples_and_override_context_floor():
+    from utils.distributions import sample_int
+
+    rng = get_rng()
+    wide = IntDistribution("normal", {"mean": 4, "std": 3}, min=2, max=6)
+    samples = [sample_int(wide, rng) for _ in range(300)]
+    assert min(samples) == 2 and max(samples) == 6  # clipped mass piles up at the edges
+    assert set(samples) <= {2, 3, 4, 5, 6}
+
+    # Without bounds the context floor applies; an explicit min replaces it
+    floor_only = IntDistribution("normal", {"mean": 0, "std": 1})
+    assert min(sample_int(floor_only, rng) for _ in range(100)) == 1
+    assert min(sample_int(floor_only, rng, min_value=0) for _ in range(100)) == 0
+    zero_ok = IntDistribution("normal", {"mean": 0, "std": 1}, min=0)
+    assert min(sample_int(zero_ok, rng) for _ in range(100)) == 0  # default floor 1 overridden
+    assert min(resolve_count(zero_ok, rng, min_value=1) for _ in range(100)) == 0
+
+    # Only max set: the context floor stays
+    capped = IntDistribution("poisson", {"lambda": 10}, max=3)
+    values = {sample_int(capped, rng) for _ in range(100)}
+    assert values <= {1, 2, 3} and 3 in values
+
+    # Uniform params and bounds intersect
+    inter = IntDistribution("uniform", {"min": 0, "max": 10}, min=4, max=5)
+    assert {sample_int(inter, rng, min_value=0) for _ in range(100)} == {4, 5}
+
+
+def test_bounds_are_validated():
+    from web.backend.models.distribution_models import IntDistributionModel
+
+    with pytest.raises(ValueError):
+        IntDistribution("poisson", {"lambda": 1}, min=3, max=2)
+    with pytest.raises(ValueError):
+        IntDistribution("poisson", {"lambda": 1}, min=-1)
+    with pytest.raises(ValueError):
+        IntDistributionModel(type="poisson", params={"lambda": 1}, min=3, max=2)
+    with pytest.raises(ValueError):
+        IntDistributionModel(type="poisson", params={"lambda": 1}, max=-1)
+    # Bounds are optional and independent
+    IntDistributionModel(type="poisson", params={"lambda": 1}, min=0)
+    IntDistributionModel(type="poisson", params={"lambda": 1}, max=9)
+
+
+def test_motif_count_min_zero_allows_graphs_without_the_motif():
+    set_seed(4)
+    try:
+        gen = MotifComposite(motifs=[
+            ["house"],
+            (["cycle", 4], IntDistribution("uniform", {"min": 0, "max": 1}, min=0)),
+        ])
+        cycles = {_count_motifs(gen.generate_graph(), "cycle_4") for _ in range(40)}
+        assert cycles == {0, 1}
+    finally:
+        reset_rng()
+
+
+def test_provenance_records_only_set_bounds():
+    from graph.dataset_metadata import to_jsonable
+
+    assert to_jsonable(IntDistribution("poisson", {"lambda": 2})) == {"type": "poisson", "params": {"lambda": 2}}
+    assert to_jsonable(IntDistribution("poisson", {"lambda": 2}, max=5)) == {
+        "type": "poisson",
+        "params": {"lambda": 2},
+        "max": 5,
+    }
+    assert to_jsonable(IntDistribution("normal", {"mean": 3, "std": 1}, min=1, max=4)) == {
+        "type": "normal",
+        "params": {"mean": 3, "std": 1},
+        "min": 1,
+        "max": 4,
+    }
+
 
 # ---------------------------------------------------------------------------
 # Extra vertices / edges sampled per graph
@@ -343,9 +427,18 @@ def test_json_suite_with_distributions_round_trips():
         gen_dataset.main([cfg_path])
 
         cfg = load_dataset_config(os.path.join(tmp, "houses"))
-        # The declarative request keeps the distribution fields verbatim...
-        assert cfg["config"]["num_extra_vertices_distribution"] == {"type": "uniform", "params": {"min": 0, "max": 2}}
-        assert cfg["config"]["perturbations"][0]["count_distribution"] == {"type": "uniform", "params": {"min": 1, "max": 2}}
+
+        def _drop_none(d):
+            return {k: v for k, v in d.items() if v is not None}
+
+        # The declarative request keeps the distribution fields verbatim (the
+        # pydantic dump also lists unset optional bounds as null)...
+        assert _drop_none(cfg["config"]["num_extra_vertices_distribution"]) == {
+            "type": "uniform", "params": {"min": 0, "max": 2},
+        }
+        assert _drop_none(cfg["config"]["perturbations"][0]["count_distribution"]) == {
+            "type": "uniform", "params": {"min": 1, "max": 2},
+        }
         # ...and the runtime objects show what was actually sampled from
         assert cfg["generation"]["graph_kwargs"]["num_extra_vertices"] == {"type": "uniform", "params": {"min": 0, "max": 2}}
         assert cfg["generation"]["graph_kwargs"]["num_extra_edges"] == {"type": "poisson", "params": {"lambda": 1}}
@@ -356,6 +449,10 @@ def test_json_suite_with_distributions_round_trips():
 if __name__ == "__main__":
     test_resolve_count_passes_ints_and_samples_distributions()
     test_to_distribution_accepts_models_dicts_and_none()
+    test_bounds_clip_samples_and_override_context_floor()
+    test_bounds_are_validated()
+    test_motif_count_min_zero_allows_graphs_without_the_motif()
+    test_provenance_records_only_set_bounds()
     test_motif_composite_samples_extras_per_graph()
     test_normalize_motif_entry_accepts_both_forms()
     test_motif_composite_fixed_pairs_match_expanded_lists()
