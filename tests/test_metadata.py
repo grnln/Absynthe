@@ -25,7 +25,6 @@ from graph.dataset_metadata import (  # noqa: E402
 )
 from graph.labeling_functions import MotifLabelingFunction  # noqa: E402
 from graph.perturbations import EdgePerturbation, RemoveNodesPerturbation  # noqa: E402
-from graph.random_motif_composite import RandomMotifComposite  # noqa: E402
 from graph.reconstruction import normalize_changes, reconstruct_original  # noqa: E402
 from utils.distributions import IntDistribution  # noqa: E402
 from utils.rng import reset_rng, set_seed  # noqa: E402
@@ -124,15 +123,18 @@ def test_dataset_without_config_json():
 
 
 def test_describe_component_serialises_distributions():
-    gen = RandomMotifComposite(motif_configs=[
-        (["house"], 1, IntDistribution("normal", {"mean": 3, "std": 1})),
-        (["cycle", 5], 2, None),
+    gen = MotifComposite(motifs=[
+        (["house"], IntDistribution("normal", {"mean": 3, "std": 1})),
+        (["cycle", 5], 2),
+        ["star", 3],
     ])
     desc = describe_component(gen)
-    assert desc["class"] == "RandomMotifComposite"
-    assert desc["params"]["motif_configs"] == [
-        [["house"], 1, {"type": "normal", "params": {"mean": 3, "std": 1}}],
-        [["cycle", 5], 2, None],
+    assert desc["class"] == "MotifComposite"
+    # The motifs are recorded as given: distributions become {type, params}
+    assert desc["params"]["motifs"] == [
+        [["house"], {"type": "normal", "params": {"mean": 3, "std": 1}}],
+        [["cycle", 5], 2],
+        ["star", 3],
     ]
     json.dumps(desc)
     print("[ok] component description is JSON serialisable")

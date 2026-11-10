@@ -66,7 +66,7 @@ Next to `metadata.json`, every dataset gets a `config.json` with the seed, the c
 {
   "seed": 42,
   "config": { "...the JSON dataset entry / web request that produced it..." },
-  "components": {"graph_generator": {"class": "RandomMotifComposite", "params": {"…": "…"}}, "labeling_functions": [], "perturbations": []},
+  "components": {"graph_generator": {"class": "MotifComposite", "params": {"motifs": [[["house"], {"type": "normal", "params": {"mean": 3, "std": 1}}]]}}, "labeling_functions": [], "perturbations": []},
   "generation": {"num_graphs": 300, "graph_kwargs": {"…": "…"}, "max_perturbation_iterations": 15, "formats": ["graphml", "triples"], "output_dir": "datasets/house"},
   "provenance": {"config_path": "…/configs/default.json", "suite_index": 0, "suite_size": 4, "suite_seed": 42, "seed_scope": "suite"}
 }

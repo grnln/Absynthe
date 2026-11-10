@@ -20,8 +20,7 @@ class PerturbationPipeline:
 
     ``desired_count`` may be a fixed int or an ``IntDistribution``; in the
     latter case it is re-sampled on every call to ``apply_and_check`` (i.e.
-    per base graph), mirroring the random motif counts of
-    ``RandomMotifComposite``.
+    per base graph), mirroring the random motif counts of ``MotifComposite``.
 
     Each successful application produces an independent perturbed graph
     derived from the same original.

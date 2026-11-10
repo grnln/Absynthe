@@ -99,14 +99,15 @@ graph = gen.generate_graph(
 
 ## 2. Motif Count (Fixed and Random)
 
-Each motif entry can specify how many instances to include.
+Each entry of `motifs` is either a motif `[type, *params]` (one instance) or a pair `(motif, count)`. Both forms can be mixed in the same list.
 
 ### Fixed Count
 
 ```python
 gen = MotifComposite(motifs=[
-    ["house"],       # 1 instance (default)
-    ["house"],       # another instance — or use count below
+    ["house"],         # 1 instance
+    ["house"],         # another instance...
+    (["cycle", 4], 3), # ...or give the count explicitly: 3 cycles
 ])
 
 # Equivalent: repeat programmatically
@@ -116,15 +117,14 @@ gen = MotifComposite(motifs=motifs)
 
 ### Random Count with Distributions
 
-Use `RandomMotifComposite` when you want a different number of motif instances per graph (useful for dataset generation):
+Give an `IntDistribution` as the count when you want a different number of motif instances per graph (useful for dataset generation). It is re-sampled on every `generate_graph` call:
 
 ```python
-from graph.random_motif_composite import RandomMotifComposite
 from utils.distributions import IntDistribution
 
-gen = RandomMotifComposite(motif_configs=[
-    (["cycle", 4], 1, None),  # fixed: always 1 cycle
-    (["house"], 1, IntDistribution("normal", {"mean": 4, "std": 0.5})),  # ~4 houses per graph
+gen = MotifComposite(motifs=[
+    ["cycle", 4],                                                       # fixed: always 1 cycle
+    (["house"], IntDistribution("normal", {"mean": 4, "std": 0.5})),  # ~4 houses per graph
 ])
 
 # Each call produces a graph with a different number of houses
@@ -132,9 +132,7 @@ graph1 = gen.generate_graph(composition="sequential")
 graph2 = gen.generate_graph(composition="sequential")
 ```
 
-Each tuple in `motif_configs` is `(motif_spec, fixed_count, distribution)`:
-- When `distribution` is `None`, `fixed_count` is used.
-- When `distribution` is provided, it overrides `fixed_count` and is sampled on each call.
+`graph.composite_graph_generator.normalize_motif_entry` is the function that interprets an entry; lists and tuples are interchangeable, so `[["house"], 3]` (the form a JSON round-trip produces) works too.
 
 ### Supported Distributions
 
@@ -561,16 +559,16 @@ Two exporters must not share a name (or an extension, or they overwrite each oth
 
 Every count that shapes a dataset can be a fixed int or an `IntDistribution` that is re-sampled for each base graph: the number of motif instances, the number of label-changing variants each perturbation must produce, and the extra vertices / edges added after composition.
 
-Use `RandomMotifComposite` as the graph generator for datasets where each graph should have a different number of motif instances:
+Give `MotifComposite` `(motif, count)` pairs with a distribution as count for datasets where each graph should have a different number of motif instances (§2):
 
 ```python
-from graph.random_motif_composite import RandomMotifComposite
+from graph.composite_graph_generator import MotifComposite
 from utils.distributions import IntDistribution
 
-graph_gen = RandomMotifComposite(motif_configs=[
-    (["cycle", 4], 1, None),                                              # always 1 cycle
-    (["house"], 1, IntDistribution("uniform", {"min": 2, "max": 5})),     # 2-5 houses
-    (["star", 3], 1, IntDistribution("poisson", {"lambda": 2})),          # ~2 stars
+graph_gen = MotifComposite(motifs=[
+    ["cycle", 4],                                                      # always 1 cycle
+    (["house"], IntDistribution("uniform", {"min": 2, "max": 5})),     # 2-5 houses
+    (["star", 3], IntDistribution("poisson", {"lambda": 2})),          # ~2 stars
 ])
 
 generator = GraphDatasetGenerator(
@@ -594,7 +592,7 @@ metadata = generator.generate_dataset(
 )
 ```
 
-`MotifComposite.generate_graph` accepts the same int-or-distribution values for `num_extra_vertices` / `num_extra_edges`, and `PerturbationPipeline` samples a distribution `desired_count` on every `apply_and_check` call (the value used is reported as `desired_count` in each result). `utils.distributions.resolve_count(spec, rng, min_value)` is the helper behind both: it returns ints untouched and samples distributions.
+`MotifComposite.generate_graph` accepts the same int-or-distribution values for `num_extra_vertices` / `num_extra_edges`, and `PerturbationPipeline` samples a distribution `desired_count` on every `apply_and_check` call (the value used is reported as `desired_count` in each result). `utils.distributions.resolve_count(spec, rng, min_value)` is the helper behind all three: it returns ints untouched and samples distributions.
 
 In JSON suites and web requests the distribution lives in a sibling field that overrides the fixed one when present, exactly like `count_distribution` for motifs:
 

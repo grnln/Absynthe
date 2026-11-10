@@ -29,7 +29,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from utils.rng import set_seed, reset_rng  # noqa: E402
-from graph.random_motif_composite import RandomMotifComposite  # noqa: E402
+from graph.composite_graph_generator import MotifComposite  # noqa: E402
 from graph.dataset_generator import GraphDatasetGenerator  # noqa: E402
 from graph.labeling_functions import MotifLabelingFunction  # noqa: E402
 from graph.perturbations import (  # noqa: E402
@@ -49,7 +49,9 @@ NUM_GRAPHS = 300
 DATASETS_ROOT = "datasets"
 CLEAN_OUTPUT = True
 
-# Normal distribution centered at 3 with std=1 -> mostly 2-4 motifs per graph
+# Normal distribution centered at 3 with std=1 -> mostly 2-4 motifs per graph.
+# Each motif entry is (motif, count): count is an int or a distribution
+# re-sampled for every graph.
 count_dist = IntDistribution("normal", {"mean": 3, "std": 1})
 
 DATASET_CONFIGS = [
@@ -57,21 +59,21 @@ DATASET_CONFIGS = [
     {
         "name": "house",
         "motifs": [
-            (["house"], 1, count_dist),
+            (["house"], count_dist),
         ],
         "motif_order": ["house"],
     },
     {
         "name": "cycle_5",
         "motifs": [
-            (["cycle", 5], 1, count_dist),
+            (["cycle", 5], count_dist),
         ],
         "motif_order": ["cycle_5"],
     },
     {
         "name": "star_5",
         "motifs": [
-            (["star", 5], 1, count_dist),
+            (["star", 5], count_dist),
         ],
         "motif_order": ["star_5"],
     },
@@ -79,9 +81,9 @@ DATASET_CONFIGS = [
     {
         "name": "house_cycle5_star5",
         "motifs": [
-            (["house"], 1, IntDistribution("normal", {"mean": 2, "std": 1})),
-            (["cycle", 5], 1, IntDistribution("normal", {"mean": 2, "std": 1})),
-            (["star", 5], 1, IntDistribution("normal", {"mean": 2, "std": 1})),
+            (["house"], IntDistribution("normal", {"mean": 2, "std": 1})),
+            (["cycle", 5], IntDistribution("normal", {"mean": 2, "std": 1})),
+            (["star", 5], IntDistribution("normal", {"mean": 2, "std": 1})),
         ],
         "motif_order": ["house", "cycle_5", "star_5"],
     },
@@ -97,7 +99,7 @@ def _datasets_from_python_configs() -> List[Dict[str, Any]]:
     datasets: List[Dict[str, Any]] = []
     for config in DATASET_CONFIGS:
         name = config["name"]
-        graph_gen = RandomMotifComposite(motif_configs=config["motifs"])
+        graph_gen = MotifComposite(motifs=config["motifs"])
         labeling = [MotifLabelingFunction(motif_order=config["motif_order"])]
         perturbations = [
             (RemoveNodesPerturbation(num_nodes=1, strategy="motif", folder_name="remove_nodes"), 1),

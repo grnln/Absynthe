@@ -23,8 +23,8 @@ from graph.dataset_generator import GraphDatasetGenerator  # noqa: E402
 from graph.dataset_metadata import load_dataset_config, load_dataset_metadata  # noqa: E402
 from graph.labeling_functions import MotifLabelingFunction  # noqa: E402
 from graph.perturbation_engine import PerturbationPipeline  # noqa: E402
+from graph.composite_graph_generator import normalize_motif_entry  # noqa: E402
 from graph.perturbations import RemoveEdgesPerturbation, RemoveNodesPerturbation  # noqa: E402
-from graph.random_motif_composite import RandomMotifComposite  # noqa: E402
 from utils.distributions import IntDistribution, resolve_count, to_distribution  # noqa: E402
 from utils.rng import get_rng, reset_rng, set_seed  # noqa: E402
 
@@ -95,15 +95,57 @@ def test_motif_composite_samples_extras_per_graph():
         reset_rng()
 
 
-def test_random_motif_composite_forwards_extra_distributions():
+# ---------------------------------------------------------------------------
+# Motif counts: MotifComposite accepts plain motifs and (motif, count) pairs
+# ---------------------------------------------------------------------------
+
+def test_normalize_motif_entry_accepts_both_forms():
+    dist = IntDistribution("uniform", {"min": 1, "max": 2})
+    assert normalize_motif_entry(["house"]) == (["house"], 1)
+    assert normalize_motif_entry(["cycle", 4]) == (["cycle", 4], 1)
+    assert normalize_motif_entry((["house"], 3)) == (["house"], 3)
+    assert normalize_motif_entry((["cycle", 4], dist)) == (["cycle", 4], dist)
+    assert normalize_motif_entry([["cycle", 4], 3]) == (["cycle", 4], 3)  # JSON round-trip form
+    for bad in ([], [4], (["house"],), (["house"], 1, None), ([], 2)):
+        with pytest.raises(ValueError):
+            normalize_motif_entry(bad)
+
+
+def _count_motifs(graph, name):
+    return len({data["motif_id"] for _, data in graph.nodes(data=True) if data.get("motif") == name})
+
+
+def test_motif_composite_fixed_pairs_match_expanded_lists():
+    set_seed(2)
+    try:
+        a = MotifComposite(motifs=[(["house"], 2), ["cycle", 4]]).generate_graph()
+    finally:
+        reset_rng()
+    set_seed(2)
+    try:
+        b = MotifComposite(motifs=[["house"], ["house"], ["cycle", 4]]).generate_graph()
+    finally:
+        reset_rng()
+    assert sorted(a.nodes(data=True)) == sorted(b.nodes(data=True))
+    assert sorted(map(sorted, a.edges())) == sorted(map(sorted, b.edges()))
+
+
+def test_motif_composite_samples_motif_counts_per_graph():
     set_seed(1)
     try:
-        gen = RandomMotifComposite(motif_configs=[(["house"], 1, IntDistribution("uniform", {"min": 1, "max": 2}))])
-        counts = {
-            _count_extra_vertices(gen.generate_graph(num_extra_vertices=IntDistribution("uniform", {"min": 1, "max": 3})))
-            for _ in range(40)
-        }
-        assert counts <= {1, 2, 3} and len(counts) > 1
+        gen = MotifComposite(motifs=[
+            (["house"], IntDistribution("uniform", {"min": 1, "max": 3})),
+            ["cycle", 4],
+        ])
+        houses, cycles, extras = set(), set(), set()
+        for _ in range(40):
+            g = gen.generate_graph(num_extra_vertices=IntDistribution("uniform", {"min": 1, "max": 3}))
+            houses.add(_count_motifs(g, "house"))
+            cycles.add(_count_motifs(g, "cycle_4"))
+            extras.add(_count_extra_vertices(g))
+        assert houses <= {1, 2, 3} and len(houses) > 1
+        assert cycles == {1}
+        assert extras <= {1, 2, 3} and len(extras) > 1
     finally:
         reset_rng()
 
@@ -194,7 +236,7 @@ def test_dataset_generator_records_distribution_counts_in_config():
 def test_request_models_accept_distribution_fields():
     from web.backend.models.dataset_models import DatasetGenerateRequest
     from web.backend.models.graph_models import GraphGenerateRequest
-    from web.backend.services.registry import build_graph_kwargs, build_perturbations
+    from web.backend.services.registry import build_graph_generator, build_graph_kwargs, build_perturbations
 
     req = DatasetGenerateRequest(
         num_graphs=2,
@@ -215,6 +257,19 @@ def test_request_models_accept_distribution_fields():
     pairs = build_perturbations(req.perturbations)
     assert pairs[0][1] == IntDistribution("uniform", {"min": 1, "max": 3})
     assert pairs[1][1] == 2
+
+    # Motif configs map onto (motif, count) pairs of a single MotifComposite
+    gen = build_graph_generator(
+        DatasetGenerateRequest(
+            num_graphs=1,
+            motifs=[
+                {"type": "house", "count": 2},
+                {"type": "cycle", "params": [5], "count_distribution": {"type": "poisson", "params": {"lambda": 2}}},
+            ],
+        )
+    )
+    assert isinstance(gen, MotifComposite)
+    assert gen.motifs == [(["house"], 2), (["cycle", 5], IntDistribution("poisson", {"lambda": 2}))]
 
     # Same fields on the single-graph request
     greq = GraphGenerateRequest(
@@ -302,7 +357,9 @@ if __name__ == "__main__":
     test_resolve_count_passes_ints_and_samples_distributions()
     test_to_distribution_accepts_models_dicts_and_none()
     test_motif_composite_samples_extras_per_graph()
-    test_random_motif_composite_forwards_extra_distributions()
+    test_normalize_motif_entry_accepts_both_forms()
+    test_motif_composite_fixed_pairs_match_expanded_lists()
+    test_motif_composite_samples_motif_counts_per_graph()
     test_pipeline_samples_desired_count_per_call()
     test_dataset_generator_records_distribution_counts_in_config()
     test_request_models_accept_distribution_fields()

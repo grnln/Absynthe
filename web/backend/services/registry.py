@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Tuple
 import web.backend.services  # noqa: F401
 from interfaces import LabelingFunction, Perturbation
 from utils.distributions import CountSpec, to_distribution
-from web.backend.models.graph_models import LabelingFunctionConfig
+from web.backend.models.graph_models import LabelingFunctionConfig, MotifConfig
 from web.backend.models.perturbation_models import PerturbationConfig
 
 # UI schemas
@@ -498,13 +498,22 @@ def build_perturbations(
     ]
 
 
-def build_graph_generator(request: "DatasetGenerateRequest"):
-    """Build the graph generator (folder, KG schema, random-motif, or fixed-motif) from a request.
-
-    Mirrors the dispatch already used in dataset_service.run_generation so the same
-    logic is shared between the web service and the CLI loader.
-    """
+def build_motif_generator(motifs: List["MotifConfig"]):
+    """``MotifComposite`` from motif configs: each entry becomes
+    ``(motif, count)`` with the ``IntDistribution`` when ``count_distribution``
+    is set (sampled per graph), else the fixed ``count``."""
     from graph.composite_graph_generator import MotifComposite
+
+    return MotifComposite(
+        motifs=[(m.to_list(), count_spec(m.count, m.count_distribution)) for m in motifs]
+    )
+
+
+def build_graph_generator(request: "DatasetGenerateRequest"):
+    """Build the graph generator (folder, KG schema or motif composite) from a request.
+
+    Shared by the web service and the CLI loader so both dispatch identically.
+    """
     from graph.folder_graph_generator import (
         FolderGraphGenerator,
         IterationOrder,
@@ -532,16 +541,4 @@ def build_graph_generator(request: "DatasetGenerateRequest"):
             allow_self_loops=schema.allow_self_loops,
         )
 
-    if any(m.count_distribution for m in request.motifs):
-        from graph.random_motif_composite import RandomMotifComposite
-
-        motif_configs = [
-            (m.to_list(), m.count, to_distribution(m.count_distribution))
-            for m in request.motifs
-        ]
-        return RandomMotifComposite(motif_configs=motif_configs)
-
-    motif_lists = []
-    for m in request.motifs:
-        motif_lists.extend([m.to_list()] * m.count)
-    return MotifComposite(motifs=motif_lists)
+    return build_motif_generator(request.motifs)
