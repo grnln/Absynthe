@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Set, Tuple
+from typing import Any, Optional, Set, Tuple
+
+from .graph_types import ordered_pair
 
 
 @dataclass
@@ -14,12 +16,15 @@ class PerturbationHint:
 
     Attributes:
         nodes: Set of node IDs in the relevant zone.
-        edges: Set of edges in the relevant zone, stored as normalized
-            (min, max) tuples for undirected graphs.
+        edges: Set of edge references in the relevant zone. Each reference
+            is ``(u, v)`` for simple graphs or ``(u, v, key)`` for
+            multigraphs, as produced by :meth:`normalize_edge`. On
+            undirected graphs the endpoints are stored in canonical
+            ``(min, max)`` order; on directed graphs the order is kept.
     """
 
-    nodes: Set[int] = field(default_factory=set)
-    edges: Set[Tuple[int, int]] = field(default_factory=set)
+    nodes: Set[Any] = field(default_factory=set)
+    edges: Set[Tuple] = field(default_factory=set)
 
     def is_empty(self) -> bool:
         return not self.nodes and not self.edges
@@ -31,5 +36,32 @@ class PerturbationHint:
         )
 
     @staticmethod
-    def normalize_edge(u: int, v: int) -> Tuple[int, int]:
-        return (u, v) if u <= v else (v, u)
+    def normalize_edge(u: Any, v: Any, key: Optional[Any] = None,
+                       directed: bool = False) -> Tuple:
+        """Build the canonical hint reference for an edge.
+
+        ``normalize_edge(u, v)`` keeps the historical behaviour (undirected,
+        endpoints sorted). Pass ``directed=True`` to keep the endpoint order
+        and ``key=`` to reference one edge of a multigraph.
+        """
+        pair = (u, v) if directed else ordered_pair(u, v)
+        return pair if key is None else pair + (key,)
+
+    def contains_edge(self, u: Any, v: Any, key: Optional[Any] = None,
+                      directed: bool = False) -> bool:
+        """Return True if the edge ``(u, v[, key])`` is referenced by the hint.
+
+        A keyless query matches keyed references with the same endpoints
+        (any parallel edge of the pair counts as "in the zone").
+        """
+        pairs = [(u, v)] if directed else [(u, v), (v, u)]
+        for pair in pairs:
+            if pair in self.edges:
+                return True
+            if key is not None and pair + (key,) in self.edges:
+                return True
+        if key is None:
+            for ref in self.edges:
+                if len(ref) == 3 and (ref[0], ref[1]) in pairs:
+                    return True
+        return False

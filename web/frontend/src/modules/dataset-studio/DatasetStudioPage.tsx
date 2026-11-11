@@ -30,6 +30,7 @@ import { Select } from '@/components/ui/Select'
 import { Slider } from '@/components/ui/Slider'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { Card, CardContent } from '@/components/ui/Card'
+import { CountInput } from '@/components/ui/CountInput'
 import { DistributionInput } from '@/components/ui/DistributionInput'
 import { useGraphState } from '@/hooks/useGraphState'
 
@@ -69,7 +70,9 @@ export function DatasetStudioPage() {
   const [composition, setComposition] = useState('sequential')
   const [compositionParams, setCompositionParams] = useState<Record<string, unknown>>({})
   const [extraV, setExtraV] = useState(0)
+  const [extraVDist, setExtraVDist] = useState<IntDistribution | undefined>(undefined)
   const [extraE, setExtraE] = useState(0)
+  const [extraEDist, setExtraEDist] = useState<IntDistribution | undefined>(undefined)
   const [labelingFunctions, setLabelingFunctions] = useState<LabelingFunctionConfig[]>(savedLabeling)
   const [perturbations, setPerturbations] = useState<PerturbationConfig[]>(savedPerturbations)
   const [maxPerturbIter, setMaxPerturbIter] = useState(10)
@@ -84,9 +87,9 @@ export function DatasetStudioPage() {
   const [error, setError] = useState<string | null>(null)
   const [completedTasks, setCompletedTasks] = useState<TaskStatus[]>([])
 
-  const wsUrl = taskId && taskStatus?.status === 'running'
-    ? `/ws/dataset/${taskId}`
-    : null
+  // Connect as soon as the task exists (its status starts as 'pending');
+  // taskId is cleared when the task finishes, which closes the socket.
+  const wsUrl = taskId ? `/api/dataset/ws/${taskId}` : null
 
   useWebSocket<TaskStatus>({
     url: wsUrl,
@@ -140,6 +143,17 @@ export function DatasetStudioPage() {
 
   const removeMotif = (idx: number) => {
     setMotifs((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const updateMotifParam = (idx: number, paramIdx: number, value: number | string) => {
+    setMotifs((prev) =>
+      prev.map((m, i) => {
+        if (i !== idx) return m
+        const newParams = [...m.params]
+        newParams[paramIdx] = value
+        return { ...m, params: newParams }
+      }),
+    )
   }
 
   const updateMotifCount = (idx: number, count: number) => {
@@ -212,6 +226,12 @@ export function DatasetStudioPage() {
     )
   }
 
+  const updatePerturbCountDistribution = (idx: number, dist: IntDistribution | undefined) => {
+    setPerturbations((prev) =>
+      prev.map((cfg, i) => (i === idx ? { ...cfg, count_distribution: dist } : cfg)),
+    )
+  }
+
   const removePerturbation = (idx: number) => {
     setPerturbations((prev) => prev.filter((_, i) => i !== idx))
   }
@@ -242,6 +262,8 @@ export function DatasetStudioPage() {
               composition_params: compositionParams,
               num_extra_vertices: extraV,
               num_extra_edges: extraE,
+              ...(extraVDist && { num_extra_vertices_distribution: extraVDist }),
+              ...(extraEDist && { num_extra_edges_distribution: extraEDist }),
               labeling_functions: labelingFunctions,
               perturbations,
               max_perturbation_iterations: maxPerturbIter,
@@ -305,13 +327,12 @@ export function DatasetStudioPage() {
             <div className="border-t border-white/10 pt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Motifs</p>
               <div className="flex flex-col gap-1.5 mb-2">
-                {motifs.map((motif, idx) => (
+                {motifs.map((motif, idx) => {
+                  const motifSchema = motifSchemas.find((s) => s.type === motif.type)
+                  return (
                   <div key={`${motif.type}-${idx}`} className="rounded-lg bg-white/5 px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <Badge color="#6366f1">{motif.type}</Badge>
-                      {motif.params.length > 0 && (
-                        <span className="text-xs text-gray-500 font-mono">{motif.params.join(', ')}</span>
-                      )}
+                      <Badge color="#6366f1">{motifSchema?.label ?? motif.type}</Badge>
                       <button
                         onClick={() => toggleMotifDistribution(idx)}
                         className={`ml-auto p-1 rounded transition-colors ${motif.count_distribution ? 'text-brand-400 bg-brand-500/20' : 'text-gray-600 hover:text-gray-400'}`}
@@ -341,8 +362,20 @@ export function DatasetStudioPage() {
                         </div>
                       )}
                     </div>
+                    {motifSchema?.params.map((param, paramIdx) => (
+                      <div key={param.name} className="mt-2">
+                        <Slider
+                          label={param.label}
+                          value={(motif.params[paramIdx] as number) ?? (param.default as number)}
+                          min={param.min ?? 1}
+                          max={(param.max as number) ?? 20}
+                          onValueChange={(value) => updateMotifParam(idx, paramIdx, value)}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
+                  )
+                })}
               </div>
               <div className="flex flex-wrap gap-1">
                 {motifSchemas.map((schema) => (
@@ -377,8 +410,26 @@ export function DatasetStudioPage() {
                   }
                 />
               ))}
-              <Slider label="Extra vertices" value={extraV} min={0} max={20} onValueChange={setExtraV} />
-              <Slider label="Extra edges" value={extraE} min={0} max={20} onValueChange={setExtraE} />
+              <CountInput
+                label="Extra vertices"
+                value={extraV}
+                distribution={extraVDist}
+                onValueChange={setExtraV}
+                onDistributionChange={setExtraVDist}
+                schemas={distributionSchemas}
+                min={0}
+                max={20}
+              />
+              <CountInput
+                label="Extra edges"
+                value={extraE}
+                distribution={extraEDist}
+                onValueChange={setExtraE}
+                onDistributionChange={setExtraEDist}
+                schemas={distributionSchemas}
+                min={0}
+                max={20}
+              />
             </div>
           </>
         )}
@@ -434,12 +485,15 @@ export function DatasetStudioPage() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <Slider
+                  <CountInput
                     label="Desired count"
                     value={cfg.count}
+                    distribution={cfg.count_distribution}
+                    onValueChange={(value) => updatePerturbCount(idx, value)}
+                    onDistributionChange={(dist) => updatePerturbCountDistribution(idx, dist)}
+                    schemas={distributionSchemas}
                     min={1}
                     max={10}
-                    onValueChange={(value) => updatePerturbCount(idx, value)}
                   />
                   {schema?.params.map((param) => (
                     param.type === 'select' ? (
@@ -496,14 +550,20 @@ export function DatasetStudioPage() {
           <PagePanel>
             <div className="flex items-center gap-2 mb-1">
               <Database className="w-4 h-4 text-brand-400" />
-              <p className="text-sm font-semibold text-gray-200">Generation in progress</p>
+              <p className="text-sm font-semibold text-gray-200">
+                {taskStatus.status === 'completed'
+                  ? 'Generation finished'
+                  : taskStatus.status === 'failed'
+                  ? 'Generation failed'
+                  : 'Generation in progress'}
+              </p>
               <Badge
-                className={
+                variant={
                   taskStatus.status === 'completed'
-                    ? 'bg-green-500/20 text-green-300 border-green-500/30'
+                    ? 'success'
                     : taskStatus.status === 'failed'
-                    ? 'bg-red-500/20 text-red-300 border-red-500/30'
-                    : 'bg-brand-600/20 text-brand-300 border-brand-500/30'
+                    ? 'error'
+                    : 'info'
                 }
               >
                 {taskStatus.status}
@@ -528,13 +588,7 @@ export function DatasetStudioPage() {
             {completedTasks.map((task) => (
               <Card key={task.task_id} className="border-white/10">
                 <CardContent className="p-3 flex items-center gap-3">
-                  <Badge
-                    className={
-                      task.status === 'completed'
-                        ? 'bg-green-500/20 text-green-300 border-green-500/30'
-                        : 'bg-red-500/20 text-red-300 border-red-500/30'
-                    }
-                  >
+                  <Badge variant={task.status === 'completed' ? 'success' : 'error'}>
                     {task.status}
                   </Badge>
                   <div className="flex-1 min-w-0">

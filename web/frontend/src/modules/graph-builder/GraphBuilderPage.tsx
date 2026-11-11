@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Slider } from '@/components/ui/Slider'
+import { CountInput } from '@/components/ui/CountInput'
 import { DistributionInput } from '@/components/ui/DistributionInput'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { useGraphState } from '@/hooks/useGraphState'
@@ -31,7 +32,9 @@ export function GraphBuilderPage() {
   const [composition, setComposition] = useState('sequential')
   const [compParams, setCompParams] = useState<Record<string, number | string>>({})
   const [extraVertices, setExtraVertices] = useState(0)
+  const [extraVerticesDist, setExtraVerticesDist] = useState<IntDistribution | undefined>(undefined)
   const [extraEdges, setExtraEdges] = useState(0)
+  const [extraEdgesDist, setExtraEdgesDist] = useState<IntDistribution | undefined>(undefined)
   const [seed, setSeed] = useState<number | undefined>(undefined)
 
   // ── Upload mode state ──
@@ -64,6 +67,8 @@ export function GraphBuilderPage() {
         composition_params: compParams,
         num_extra_vertices: extraVertices,
         num_extra_edges: extraEdges,
+        ...(extraVerticesDist && { num_extra_vertices_distribution: extraVerticesDist }),
+        ...(extraEdgesDist && { num_extra_edges_distribution: extraEdgesDist }),
         ...(seed !== undefined && { seed }),
       })
       setGraph(res.graph_id, res.elements)
@@ -281,19 +286,25 @@ export function GraphBuilderPage() {
 
               <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Extras</p>
-                <Slider
+                <CountInput
                   label="Extra vertices"
                   value={extraVertices}
+                  distribution={extraVerticesDist}
+                  onValueChange={setExtraVertices}
+                  onDistributionChange={setExtraVerticesDist}
+                  schemas={distributionSchemas}
                   min={0}
                   max={20}
-                  onValueChange={setExtraVertices}
                 />
-                <Slider
+                <CountInput
                   label="Extra edges"
                   value={extraEdges}
+                  distribution={extraEdgesDist}
+                  onValueChange={setExtraEdges}
+                  onDistributionChange={setExtraEdgesDist}
+                  schemas={distributionSchemas}
                   min={0}
                   max={20}
-                  onValueChange={setExtraEdges}
                 />
                 <Input
                   label="Seed (optional)"

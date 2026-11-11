@@ -44,7 +44,7 @@ class StarMotifGenerator(MotifGenerator):
     @staticmethod
     def assign_labels(graph, num_leaves=3):
         """
-        Search for subgraphs shaped like a "star" and label their nodes.
+        Search for subgraphs shaped like a "star" with `num_leaves` leaves and label their nodes.
         """
         motif = StarMotifGenerator().generate_motif(0, num_leaves)
-        return assign_labels_to_motif(graph, motif, 'star')
+        return assign_labels_to_motif(graph, motif, f'star_{num_leaves}')

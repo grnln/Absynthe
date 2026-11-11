@@ -15,6 +15,13 @@ function parseParamValue(param: ParamSchema, raw: string): number {
   return Number.parseFloat(raw || '0')
 }
 
+/** Empty input means "no bound"; otherwise a non-negative integer. */
+function parseBound(raw: string): number | undefined {
+  if (raw.trim() === '') return undefined
+  const n = Number.parseInt(raw, 10)
+  return Number.isNaN(n) ? undefined : Math.max(0, n)
+}
+
 export function DistributionInput({ value, onChange, schemas, className }: DistributionInputProps) {
   const schema = useMemo(
     () => schemas.find((s) => s.type === value.type),
@@ -25,6 +32,16 @@ export function DistributionInput({ value, onChange, schemas, className }: Distr
     () => schemas.map((s) => ({ value: s.type, label: s.label })),
     [schemas],
   )
+
+  const setBound = (key: 'min' | 'max', raw: string) => {
+    const bound = parseBound(raw)
+    const next: IntDistribution = { ...value }
+    if (bound === undefined) delete next[key]
+    else next[key] = bound
+    onChange(next)
+  }
+
+  const boundsInvalid = value.min !== undefined && value.max !== undefined && value.min > value.max
 
   return (
     <div className={className}>
@@ -37,7 +54,8 @@ export function DistributionInput({ value, onChange, schemas, className }: Distr
           for (const p of newSchema?.params ?? []) {
             params[p.name] = p.default as number
           }
-          onChange({ type: type as IntDistribution['type'], params })
+          // Keep the bounds: they are independent of the distribution shape
+          onChange({ ...value, type: type as IntDistribution['type'], params })
         }}
         options={typeOptions}
       />
@@ -59,6 +77,27 @@ export function DistributionInput({ value, onChange, schemas, className }: Distr
           className="mt-1.5"
         />
       ))}
+      <div className="grid grid-cols-2 gap-2 mt-1.5">
+        <Input
+          label="Min (optional)"
+          type="number"
+          min={0}
+          step="1"
+          placeholder="default"
+          value={value.min !== undefined ? String(value.min) : ''}
+          onChange={(e) => setBound('min', e.target.value)}
+        />
+        <Input
+          label="Max (optional)"
+          type="number"
+          min={0}
+          step="1"
+          placeholder="none"
+          value={value.max !== undefined ? String(value.max) : ''}
+          onChange={(e) => setBound('max', e.target.value)}
+          error={boundsInvalid ? 'Max must be >= min' : undefined}
+        />
+      </div>
     </div>
   )
 }

@@ -5,7 +5,6 @@ import os
 import shutil
 import tempfile
 import threading
-from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import UploadFile
@@ -65,18 +64,7 @@ def upload(
         first_path = valid_paths[0]
         graph = load_graph_file(first_path)
 
-        # Compute stats (same pattern as graph_service.py)
-        motif_counts: dict = defaultdict(int)
-        for _, data in graph.nodes(data=True):
-            motif_name = data.get("motif", "")
-            if motif_name:
-                motif_counts[motif_name] += 1
-
-        stats = GraphStats(
-            num_nodes=graph.number_of_nodes(),
-            num_edges=graph.number_of_edges(),
-            motif_counts=dict(motif_counts),
-        )
+        stats: GraphStats = serialization.graph_stats(graph)
 
         graph_id = graph_store.store(graph)
         elements = serialization.graph_to_elements(graph)

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FlaskConical, Plus, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { getPerturbations } from '@/api/capabilities'
+import { getDistributions, getPerturbations } from '@/api/capabilities'
 import { applyPerturbation } from '@/api/perturbation'
 import type {
+  DistributionSchema,
+  IntDistribution,
   ParamSchema,
   PerturbationConfig,
   PerturbationPreview,
@@ -14,6 +16,7 @@ import { PageContainer, PagePanel } from '@/components/layout/PageContainer'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
+import { CountInput } from '@/components/ui/CountInput'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Slider } from '@/components/ui/Slider'
@@ -55,6 +58,7 @@ export function PerturbationLabPage() {
   } = useGraphState()
 
   const [schemas, setSchemas] = useState<PerturbationSchema[]>([])
+  const [distributionSchemas, setDistributionSchemas] = useState<DistributionSchema[]>([])
   const [configs, setConfigs] = useState<PerturbationConfig[]>(savedPerturbations)
   const [maxIterations, setMaxIterations] = useState(10)
   const [seed, setSeed] = useState<number | undefined>(undefined)
@@ -63,6 +67,7 @@ export function PerturbationLabPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    getDistributions().then(setDistributionSchemas).catch(() => {})
     getPerturbations()
       .then((loaded) => {
         setSchemas(loaded)
@@ -109,6 +114,12 @@ export function PerturbationLabPage() {
   const updateCount = (idx: number, count: number) => {
     setConfigs((prev) =>
       prev.map((cfg, i) => (i === idx ? { ...cfg, count } : cfg)),
+    )
+  }
+
+  const updateCountDistribution = (idx: number, dist: IntDistribution | undefined) => {
+    setConfigs((prev) =>
+      prev.map((cfg, i) => (i === idx ? { ...cfg, count_distribution: dist } : cfg)),
     )
   }
 
@@ -164,15 +175,19 @@ export function PerturbationLabPage() {
                     </button>
                   </div>
 
-                  <Slider
+                  <CountInput
                     label="Desired count"
                     value={cfg.count}
+                    distribution={cfg.count_distribution}
+                    onValueChange={(value) => updateCount(idx, value)}
+                    onDistributionChange={(dist) => updateCountDistribution(idx, dist)}
+                    schemas={distributionSchemas}
                     min={1}
                     max={10}
-                    onValueChange={(value) => updateCount(idx, value)}
                   />
                   <p className="text-[11px] text-amber-600 leading-relaxed">
-                    Used for dataset generation volume. Preview tabs show one successful example per perturbation.
+                    Used for dataset generation volume (a distribution is re-sampled for every base graph).
+                    Preview tabs show one successful example per perturbation.
                   </p>
 
                   {schema?.params.map((param) => (
@@ -286,7 +301,7 @@ export function PerturbationLabPage() {
               <TabsContent
                 key={preview.config_index}
                 value={String(preview.config_index)}
-                className="mt-0 h-full"
+                className="mt-0 flex-1 min-h-0"
               >
                 {preview.success ? (
                   <GraphDiffView

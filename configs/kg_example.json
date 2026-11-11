@@ -1,0 +1,89 @@
+{
+  "seed": 7,
+  "clean_output": true,
+  "datasets_root": "datasets_kg",
+  "shared": {
+    "num_graphs": 50,
+    "max_perturbation_iterations": 15,
+    "formats": ["graphml", "triples"],
+    "labeling_functions": [
+      {
+        "type": "entity_type_labeling",
+        "params": {
+          "patterns": {
+            "employee": { "relation": "works_at", "direction": "out" },
+            "author":   { "relation": "wrote",    "direction": "out" }
+          }
+        }
+      }
+    ],
+    "perturbations": [
+      {
+        "type": "remove_edges",
+        "count": 1,
+        "folder_name": "remove_works_at",
+        "params": { "p_remove": 0.3, "relations": ["works_at"] }
+      },
+      {
+        "type": "corrupt_triples",
+        "count": 1,
+        "folder_name": "corrupt_triples",
+        "params": { "num_triples": 2, "mode": "relation" }
+      },
+      {
+        "type": "remove_nodes",
+        "count": 1,
+        "folder_name": "remove_nodes",
+        "params": { "num_nodes": 1, "strategy": "by_attribute", "attr": "type", "value": "Company" }
+      }
+    ]
+  },
+  "datasets": [
+    {
+      "name": "synthetic_kg",
+      "kg_schema": {
+        "entity_types": { "Person": 12, "Company": 4, "Paper": 8 },
+        "relations": [
+          { "name": "works_at", "domain": "Person", "range": "Company", "p": 0.25 },
+          { "name": "wrote",    "domain": "Person", "range": "Paper",   "count": 10 },
+          { "name": "cites",    "domain": "Paper",  "range": "Paper",   "p": 0.15 },
+          { "name": "knows",    "domain": "Person", "range": "Person",  "p": 0.1 }
+        ]
+      }
+    },
+    {
+      "name": "rdf_folder_kg",
+      "num_graphs": 3,
+      "folder_source": {
+        "folder_path": "examples/rdf",
+        "iteration_order": "sequential",
+        "exhaustion_policy": "cycle"
+      },
+      "labeling_functions": [
+        {
+          "type": "entity_type_labeling",
+          "params": {
+            "patterns": {
+              "author":   { "relation": "ex:wrote",   "direction": "out" },
+              "employee": { "relation": "ex:worksAt", "direction": "out" }
+            }
+          }
+        }
+      ],
+      "perturbations": [
+        {
+          "type": "remove_edges",
+          "count": 1,
+          "folder_name": "remove_works_at",
+          "params": { "p_remove": 0.5, "relations": ["ex:worksAt"] }
+        },
+        {
+          "type": "corrupt_triples",
+          "count": 1,
+          "folder_name": "corrupt_triples",
+          "params": { "num_triples": 1, "mode": "tail" }
+        }
+      ]
+    }
+  ]
+}

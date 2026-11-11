@@ -3,27 +3,21 @@ import web.backend.services  # noqa: F401
 
 from typing import List, Tuple
 
-import networkx as nx
-
+from interfaces import GraphLike
+from utils.kg_utils import apply_labeling_result
 from web.backend.models.graph_models import LabelingFunctionConfig
 from web.backend.services import graph_store, serialization
 from web.backend.services.registry import build_labeling_functions
 
 
 def _apply_labels(
-    graph: nx.Graph,
+    graph: GraphLike,
     labeling_configs: List[LabelingFunctionConfig],
     attribute_name: str,
 ) -> None:
     labelers = build_labeling_functions(labeling_configs)
     for labeler in labelers:
-        result = labeler.label(graph)
-        for node, label in result.node_labels.items():
-            if node in graph:
-                graph.nodes[node][attribute_name] = label
-                graph.nodes[node]["label"] = label
-        for key, value in result.graph_labels.items():
-            graph.graph[key] = value
+        apply_labeling_result(graph, labeler.label(graph), attribute_name)
 
 
 def assign(

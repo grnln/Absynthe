@@ -10,7 +10,10 @@ class LabelingResult:
 
     Attributes:
         node_labels: Mapping from node ID to its label (node-level labeling).
-        edge_labels: Mapping from edge tuple (u, v) to its label (edge-level labeling).
+        edge_labels: Mapping from edge reference to its label (edge-level
+            labeling). A reference is ``(u, v)`` for simple graphs or
+            ``(u, v, key)`` for multigraphs, as built by
+            ``utils.kg_utils.edge_key``.
         graph_labels: Named graph-level labels, keyed by label name.
             Multiple labeling functions can contribute different graph-level
             labels without overwriting each other.
@@ -26,9 +29,9 @@ class LabelingResult:
             ``details`` (``motif_nodes`` / ``motif_edges``).
     """
 
-    node_labels: Dict[int, Any]
-    edge_labels: Dict[Tuple[int, int], Any] = field(default_factory=dict)
+    node_labels: Dict[Any, Any]
+    edge_labels: Dict[Tuple, Any] = field(default_factory=dict)
     graph_labels: Dict[str, Any] = field(default_factory=dict)
-    details: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    details: Dict[Any, Dict[str, Any]] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
     hint: Optional[PerturbationHint] = None

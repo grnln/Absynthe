@@ -1,0 +1,37 @@
+@prefix ex:   <http://example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# Small multi-relational knowledge graph used by the examples and tests:
+# typed entities, a literal property and two parallel relations between
+# the same pair (ex:alice -> ex:bob).
+
+ex:alice   a ex:Person, ex:Author ;
+           foaf:name "Alice" ;
+           foaf:knows ex:bob ;
+           ex:collaboratesWith ex:bob ;
+           ex:worksAt ex:acme ;
+           ex:wrote ex:paper1 .
+
+ex:bob     a ex:Person ;
+           foaf:name "Bob" ;
+           foaf:knows ex:carol ;
+           ex:worksAt ex:acme ;
+           ex:wrote ex:paper2 .
+
+ex:carol   a ex:Person ;
+           foaf:name "Carol" ;
+           foaf:knows ex:alice ;
+           ex:worksAt ex:globex ;
+           ex:wrote ex:paper1, ex:paper2 .
+
+ex:acme    a ex:Company ;
+           foaf:name "ACME" .
+
+ex:globex  a ex:Company ;
+           foaf:name "Globex" .
+
+ex:paper1  a ex:Paper ;
+           ex:cites ex:paper2 .
+
+ex:paper2  a ex:Paper .

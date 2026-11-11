@@ -178,9 +178,11 @@ pyrightconfig.json
 pictures/
 .claude/
 test_output/
+
+# Stray npm files at the repo root (the frontend has its own under web/frontend/)
+/package.json
+/package-lock.json
 web/frontend/node_modules/
 !web/frontend/src/lib/
 !web/frontend/src/lib/*.ts
-
-datasets/
-visualizations/
+dataset*/

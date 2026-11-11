@@ -1,59 +1,30 @@
 """Graph generation service."""
 import web.backend.services  # noqa: F401 - side-effect import
 
-from collections import defaultdict
 from typing import Tuple
-
-import networkx as nx
 
 from web.backend.models.graph_models import GraphGenerateRequest, GraphStats
 from web.backend.services import graph_store, serialization
-from web.backend.services.registry import normalize_composition_params
+from web.backend.services.registry import build_graph_kwargs, build_motif_generator
 
 
 def generate(request: GraphGenerateRequest) -> Tuple[str, list, GraphStats]:
     """Generate a composite graph and store it. Returns (graph_id, elements, stats)."""
-    from graph.composite_graph_generator import MotifComposite
     from utils.rng import set_seed, reset_rng
 
     if request.seed is not None:
         set_seed(request.seed)
 
     try:
-        from utils.distributions import IntDistribution, sample_int
-        from utils.rng import get_rng
-
-        rng = get_rng()
-        motif_lists = []
-        for m in request.motifs:
-            if m.count_distribution:
-                dist = IntDistribution(type=m.count_distribution.type, params=dict(m.count_distribution.params))
-                n = sample_int(dist, rng)
-            else:
-                n = m.count
-            motif_lists.extend([m.to_list()] * n)
-        generator = MotifComposite(motifs=motif_lists)
-        graph: nx.Graph = generator.generate_graph(
-            num_extra_vertices=request.num_extra_vertices,
-            num_extra_edges=request.num_extra_edges,
-            composition=request.composition,
-            composition_params=normalize_composition_params(request.composition_params),
-        )
+        # Motif counts and extras given as distributions are sampled inside
+        # generate_graph, exactly as in dataset generation.
+        generator = build_motif_generator(request.motifs)
+        graph = generator.generate_graph(**build_graph_kwargs(request))
     finally:
         if request.seed is not None:
             reset_rng()
 
-    motif_counts: dict = defaultdict(int)
-    for _, data in graph.nodes(data=True):
-        motif_name = data.get("motif", "")
-        if motif_name:
-            motif_counts[motif_name] += 1
-
-    stats = GraphStats(
-        num_nodes=graph.number_of_nodes(),
-        num_edges=graph.number_of_edges(),
-        motif_counts=dict(motif_counts),
-    )
+    stats = serialization.graph_stats(graph)
 
     graph_id = graph_store.store(graph)
     elements = serialization.graph_to_elements(graph)

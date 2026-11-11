@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Tuple
 
 import web.backend.services  # noqa: F401
 from interfaces import LabelingFunction, Perturbation
-from web.backend.models.graph_models import LabelingFunctionConfig
+from utils.distributions import CountSpec, to_distribution
+from web.backend.models.graph_models import LabelingFunctionConfig, MotifConfig
 from web.backend.models.perturbation_models import PerturbationConfig
 
 # UI schemas
@@ -39,6 +40,21 @@ MOTIF_SCHEMAS: List[Dict[str, Any]] = [
         "label": "Gate",
         "description": "Entry node, two parallel arms, exit node",
         "params": [{"name": "arm_length", "label": "Arm length", "type": "int", "default": 1, "min": 1}],
+    },
+    {
+        "type": "grid",
+        "label": "Grid",
+        "description": "Rectangular lattice of rows x cols nodes",
+        "params": [
+            {"name": "rows", "label": "Rows", "type": "int", "default": 3, "min": 2},
+            {"name": "cols", "label": "Columns", "type": "int", "default": 3, "min": 2},
+        ],
+    },
+    {
+        "type": "clique",
+        "label": "Clique",
+        "description": "Complete graph K_n: every pair of n nodes is connected",
+        "params": [{"name": "num_nodes", "label": "Nodes", "type": "int", "default": 4, "min": 2}],
     },
 ]
 
@@ -120,7 +136,7 @@ DISTRIBUTION_SCHEMAS: List[Dict[str, Any]] = [
     {
         "type": "normal",
         "label": "Normal",
-        "description": "Bell curve around mean, clamped to >= 1",
+        "description": "Bell curve around mean, rounded to an integer (use min/max bounds to clip)",
         "params": [
             {"name": "mean", "label": "Mean", "type": "float", "default": 3.0, "min": 0.1},
             {"name": "std", "label": "Std Dev", "type": "float", "default": 1.0, "min": 0.1},
@@ -149,8 +165,46 @@ LABELING_FUNCTION_SCHEMAS: List[Dict[str, Any]] = [
                 "default": "",
             }
         ],
-    }
+    },
+    {
+        "id": "entity_type_labeling",
+        "label": "Entity Type Labeling (KG)",
+        "description": (
+            "Label nodes by entity type and edges by relation type; optional "
+            "patterns derive node labels from the relations a node takes part in."
+        ),
+        "params": [
+            {"name": "node_attr", "label": "Node type attribute", "type": "string", "default": "type"},
+            {"name": "edge_attr", "label": "Edge relation attribute", "type": "string", "default": "relation"},
+            {"name": "default", "label": "Default label", "type": "string", "default": "unknown"},
+            {
+                "name": "patterns",
+                "label": "Patterns (JSON: {name: {relation, direction, node_type}})",
+                "type": "string",
+                "default": "",
+            },
+        ],
+    },
 ]
+
+KG_SCHEMA_SCHEMA: Dict[str, Any] = {
+    "id": "kg_schema",
+    "label": "Synthetic knowledge graph",
+    "description": "Sample a multi-relational KG from entity types and relation specs (domain, range, p | count).",
+    "params": [
+        {"name": "entity_types", "label": "Entity types (JSON: {type: count})", "type": "string", "default": "{}"},
+        {"name": "relations", "label": "Relations (JSON list of {name, domain, range, p | count})", "type": "string", "default": "[]"},
+        {"name": "directed", "label": "Directed", "type": "select", "options": ["true", "false"], "default": "true"},
+        {"name": "multigraph", "label": "Multigraph", "type": "select", "options": ["true", "false"], "default": "true"},
+    ],
+}
+
+_RELATIONS_PARAM = {
+    "name": "relations",
+    "label": "Relation types (comma-separated, KG only)",
+    "type": "string",
+    "default": "",
+}
 
 PERTURBATION_SCHEMAS: List[Dict[str, Any]] = [
     {
@@ -175,8 +229,11 @@ PERTURBATION_SCHEMAS: List[Dict[str, Any]] = [
     {
         "id": "remove_edges",
         "label": "Remove Edges",
-        "description": "Randomly remove edges with probability p_remove.",
-        "params": [{"name": "p_remove", "label": "p_remove", "type": "float", "default": 0.1, "min": 0.0, "max": 1.0}],
+        "description": "Randomly remove edges with probability p_remove (optionally only of given relation types).",
+        "params": [
+            {"name": "p_remove", "label": "p_remove", "type": "float", "default": 0.1, "min": 0.0, "max": 1.0},
+            _RELATIONS_PARAM,
+        ],
     },
     {
         "id": "add_edges",
@@ -195,6 +252,30 @@ PERTURBATION_SCHEMAS: List[Dict[str, Any]] = [
             {"name": "p_remove", "label": "p_remove", "type": "float", "default": 0.1, "min": 0.0, "max": 1.0},
             {"name": "p_add", "label": "p_add", "type": "float", "default": 0.05, "min": 0.0, "max": 1.0},
             {"name": "add_num", "label": "add_num", "type": "int", "default": 0, "min": 0},
+            _RELATIONS_PARAM,
+        ],
+    },
+    {
+        "id": "corrupt_triples",
+        "label": "Corrupt Triples (KG)",
+        "description": "Replace the relation, head or tail of triples (negative-sampling style), reversibly.",
+        "params": [
+            {"name": "num_triples", "label": "Triples to corrupt", "type": "int", "default": 1, "min": 1},
+            {
+                "name": "mode",
+                "label": "Mode",
+                "type": "select",
+                "options": ["relation", "head", "tail", "any"],
+                "default": "relation",
+            },
+            _RELATIONS_PARAM,
+            {
+                "name": "same_type",
+                "label": "Replacement endpoint of the same entity type",
+                "type": "select",
+                "options": ["true", "false"],
+                "default": "true",
+            },
         ],
     },
 ]
@@ -230,6 +311,28 @@ def _to_float(value: Any, default: float) -> float:
         return default
 
 
+def _to_bool(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _parse_json_param(raw: Any, default: Any) -> Any:
+    """Accept an already-parsed JSON value or a JSON string (UI forms send strings)."""
+    if raw is None:
+        return default
+    if isinstance(raw, (dict, list)):
+        return raw
+    text = str(raw).strip()
+    if not text:
+        return default
+    import json
+
+    return json.loads(text)
+
+
 def normalize_composition_params(params: Dict[str, Any] | None) -> Dict[str, Any]:
     if not params:
         return {}
@@ -239,6 +342,33 @@ def normalize_composition_params(params: Dict[str, Any] | None) -> Dict[str, Any
         values = [chunk.strip() for chunk in blocks.split(",") if chunk.strip()]
         normalized["blocks"] = [int(chunk) for chunk in values if chunk.isdigit()]
     return normalized
+
+
+def count_spec(fixed: int, distribution: Any = None) -> CountSpec:
+    """Pick the runtime count: the ``IntDistribution`` when a distribution
+    model is given (sampled per graph downstream), else the fixed int."""
+    dist = to_distribution(distribution)
+    return dist if dist is not None else fixed
+
+
+def build_graph_kwargs(request: Any) -> Dict[str, Any]:
+    """Keyword arguments for ``generate_graph`` / ``generate_dataset`` built
+    from a ``GraphGenerateRequest`` or ``DatasetGenerateRequest``.
+
+    ``num_extra_vertices`` / ``num_extra_edges`` become ``IntDistribution``
+    objects when the request carries ``*_distribution`` fields, so motif
+    generators re-sample them for every graph.
+    """
+    return {
+        "num_extra_vertices": count_spec(
+            request.num_extra_vertices, request.num_extra_vertices_distribution
+        ),
+        "num_extra_edges": count_spec(
+            request.num_extra_edges, request.num_extra_edges_distribution
+        ),
+        "composition": request.composition,
+        "composition_params": normalize_composition_params(request.composition_params),
+    }
 
 
 def build_labeling_functions(
@@ -257,6 +387,18 @@ def build_labeling_functions(
             motif_order = _parse_csv_list(params.get("motif_order"))
             labeling_functions.append(
                 MotifLabelingFunction(motif_order=motif_order or None)
+            )
+        elif cfg_type == "entity_type_labeling":
+            from graph.kg_labeling_functions import EntityTypeLabelingFunction
+
+            labeling_functions.append(
+                EntityTypeLabelingFunction(
+                    node_attr=str(params.get("node_attr") or "type"),
+                    edge_attr=str(params.get("edge_attr") or "relation"),
+                    default=str(params.get("default") or "unknown"),
+                    patterns=_parse_json_param(params.get("patterns"), {}) or None,
+                    label_edges=_to_bool(params.get("label_edges"), True),
+                )
             )
         else:
             raise ValueError(f"Unknown labeling function: {cfg.type}")
@@ -299,10 +441,14 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
             folder_name=folder_name,
         )
 
+    relations = _parse_csv_list(params.get("relations")) or None
+    add_relation = str(params.get("add_relation")).strip() if params.get("add_relation") else None
+
     if cfg_type == "remove_edges":
         return RemoveEdgesPerturbation(
             p_remove=_to_float(params.get("p_remove"), 0.1),
             folder_name=folder_name,
+            relations=relations,
         )
 
     if cfg_type == "add_edges":
@@ -311,6 +457,7 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
             p_add=_to_float(params.get("p_add"), 0.05),
             add_num=add_num if add_num > 0 else None,
             folder_name=folder_name,
+            add_relation=add_relation,
         )
 
     if cfg_type == "edge_perturbation":
@@ -320,6 +467,19 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
             p_add=_to_float(params.get("p_add"), 0.05),
             add_num=add_num if add_num > 0 else None,
             folder_name=folder_name,
+            relations=relations,
+            add_relation=add_relation,
+        )
+
+    if cfg_type == "corrupt_triples":
+        from graph.kg_perturbations import CorruptTriplesPerturbation
+
+        return CorruptTriplesPerturbation(
+            num_triples=max(1, _to_int(params.get("num_triples"), 1)),
+            mode=str(params.get("mode") or "relation"),
+            relations=relations,
+            same_type=_to_bool(params.get("same_type"), True),
+            folder_name=folder_name,
         )
 
     raise ValueError(f"Unknown perturbation type: {config.type}")
@@ -327,19 +487,33 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
 
 def build_perturbations(
     configs: List[PerturbationConfig] | None,
-) -> List[Tuple[Perturbation, int]]:
+) -> List[Tuple[Perturbation, CountSpec]]:
+    """``(perturbation, count)`` pairs; ``count`` is the ``IntDistribution``
+    when the config has ``count_distribution`` (sampled per base graph)."""
     if not configs:
         return []
-    return [(build_perturbation(cfg), cfg.count) for cfg in configs]
+    return [
+        (build_perturbation(cfg), count_spec(cfg.count, cfg.count_distribution))
+        for cfg in configs
+    ]
+
+
+def build_motif_generator(motifs: List["MotifConfig"]):
+    """``MotifComposite`` from motif configs: each entry becomes
+    ``(motif, count)`` with the ``IntDistribution`` when ``count_distribution``
+    is set (sampled per graph), else the fixed ``count``."""
+    from graph.composite_graph_generator import MotifComposite
+
+    return MotifComposite(
+        motifs=[(m.to_list(), count_spec(m.count, m.count_distribution)) for m in motifs]
+    )
 
 
 def build_graph_generator(request: "DatasetGenerateRequest"):
-    """Build the graph generator (folder, random-motif, or fixed-motif) from a request.
+    """Build the graph generator (folder, KG schema or motif composite) from a request.
 
-    Mirrors the dispatch already used in dataset_service.run_generation so the same
-    logic is shared between the web service and the CLI loader.
+    Shared by the web service and the CLI loader so both dispatch identically.
     """
-    from graph.composite_graph_generator import MotifComposite
     from graph.folder_graph_generator import (
         FolderGraphGenerator,
         IterationOrder,
@@ -351,28 +525,20 @@ def build_graph_generator(request: "DatasetGenerateRequest"):
             folder_path=request.folder_source.folder_path,
             iteration_order=IterationOrder(request.folder_source.iteration_order),
             exhaustion_policy=ExhaustionPolicy(request.folder_source.exhaustion_policy),
+            as_undirected=request.folder_source.as_undirected,
+            rdf_options=request.folder_source.rdf_options or None,
         )
 
-    if any(m.count_distribution for m in request.motifs):
-        from graph.random_motif_composite import RandomMotifComposite
-        from utils.distributions import IntDistribution
+    if request.kg_schema:
+        from graph.schema_kg_generator import SchemaKGGenerator
 
-        motif_configs = [
-            (
-                m.to_list(),
-                m.count,
-                IntDistribution(
-                    type=m.count_distribution.type,
-                    params=dict(m.count_distribution.params),
-                )
-                if m.count_distribution
-                else None,
-            )
-            for m in request.motifs
-        ]
-        return RandomMotifComposite(motif_configs=motif_configs)
+        schema = request.kg_schema
+        return SchemaKGGenerator(
+            entity_types=dict(schema.entity_types),
+            relations=[r.model_dump(exclude_none=True) for r in schema.relations],
+            directed=schema.directed,
+            multigraph=schema.multigraph,
+            allow_self_loops=schema.allow_self_loops,
+        )
 
-    motif_lists = []
-    for m in request.motifs:
-        motif_lists.extend([m.to_list()] * m.count)
-    return MotifComposite(motifs=motif_lists)
+    return build_motif_generator(request.motifs)

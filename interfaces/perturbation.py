@@ -1,7 +1,7 @@
 import abc
 from typing import Tuple, Dict, Any, Optional
-import networkx as nx
 
+from .graph_types import GraphLike
 from .perturbation_hint import PerturbationHint
 from .perturbation_heuristic import PerturbationHeuristic
 
@@ -18,13 +18,15 @@ class Perturbation(abc.ABC):
     """
 
     @abc.abstractmethod
-    def apply(self, graph: nx.Graph[Any],
+    def apply(self, graph: GraphLike,
               hint: Optional[PerturbationHint] = None
-              ) -> Tuple[nx.Graph[Any], Dict[str, Any]]:
+              ) -> Tuple[GraphLike, Dict[str, Any]]:
         """Apply this perturbation to a graph.
 
         The implementation must NOT mutate the input graph. It should work
-        on a copy.
+        on a copy. Implementations must support every NetworkX graph class
+        (use the helpers in ``utils.kg_utils`` for edge access); reversible
+        edge records include a ``"key"`` entry on multigraphs.
 
         Args:
             graph: The input graph to perturb.

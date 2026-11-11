@@ -69,6 +69,9 @@ export interface PerturbationSchema {
 export interface IntDistribution {
   type: 'uniform' | 'normal' | 'poisson'
   params: Record<string, number>
+  /** Optional bounds: samples are clipped into [min, max] */
+  min?: number
+  max?: number
 }
 
 export interface DistributionSchema {
@@ -94,9 +97,19 @@ export interface PerturbationConfig {
   type: string
   params: Record<string, unknown>
   count: number
+  /** Sampled per base graph; overrides `count` when present */
+  count_distribution?: IntDistribution
 }
 
-export interface GraphGenerateRequest {
+/** Extra vertices / edges: fixed counts, or distributions sampled per graph */
+export interface ExtrasConfig {
+  num_extra_vertices?: number
+  num_extra_vertices_distribution?: IntDistribution
+  num_extra_edges?: number
+  num_extra_edges_distribution?: IntDistribution
+}
+
+export interface GraphGenerateRequest extends ExtrasConfig {
   motifs: MotifConfig[]
   composition: string
   composition_params: Record<string, unknown>
@@ -197,14 +210,12 @@ export interface PerturbationResponse {
   message: string
 }
 
-export interface DatasetGenerateRequest {
+export interface DatasetGenerateRequest extends ExtrasConfig {
   num_graphs: number
   motifs?: MotifConfig[]
   folder_source?: FolderSourceConfig
   composition?: string
   composition_params?: Record<string, unknown>
-  num_extra_vertices?: number
-  num_extra_edges?: number
   labeling_functions: LabelingFunctionConfig[]
   perturbations: PerturbationConfig[]
   max_perturbation_iterations: number

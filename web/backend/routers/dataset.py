@@ -1,10 +1,14 @@
 """Dataset generation and browsing endpoints."""
 import asyncio
-import json
 import os
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect
 
+from graph.dataset_metadata import (
+    METADATA_FILENAME,
+    load_dataset_config,
+    load_dataset_metadata,
+)
 from web.backend.models.dataset_models import DatasetGenerateRequest, TaskStatus
 from web.backend.services import dataset_service
 
@@ -46,9 +50,8 @@ async def dataset_progress_ws(websocket: WebSocket, task_id: str) -> None:
         pass
 
 
-@router.get("/{output_dir_b64}/graphs")
-async def list_graphs(output_dir_b64: str) -> list:
-    """List graph records from a dataset's metadata.json.
+def _dataset_dir(output_dir_b64: str) -> str:
+    """Decode a base64 output_dir and check it holds a dataset (metadata.json).
 
     ``output_dir_b64`` is the output_dir path base64-encoded to avoid path
     separator issues in the URL.
@@ -60,9 +63,21 @@ async def list_graphs(output_dir_b64: str) -> list:
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid output_dir encoding.")
 
-    meta_path = os.path.join(output_dir, "metadata.json")
-    if not os.path.isfile(meta_path):
+    if not os.path.isfile(os.path.join(output_dir, METADATA_FILENAME)):
         raise HTTPException(status_code=404, detail="Dataset metadata not found.")
+    return output_dir
 
-    with open(meta_path) as f:
-        return json.load(f)
+
+@router.get("/{output_dir_b64}/graphs")
+async def list_graphs(output_dir_b64: str) -> list:
+    """List variant records from a dataset's metadata.json."""
+    return load_dataset_metadata(_dataset_dir(output_dir_b64))
+
+
+@router.get("/{output_dir_b64}/config")
+async def get_config(output_dir_b64: str) -> dict:
+    """Return the dataset's config.json: seed, config, components and generation."""
+    config = load_dataset_config(_dataset_dir(output_dir_b64))
+    if config is None:
+        raise HTTPException(status_code=404, detail="Dataset config not found.")
+    return config

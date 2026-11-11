@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from utils.version import __version__
 from web.backend.config import DEV_ORIGINS
 from web.backend.routers import capabilities, dataset, graph, labels, perturbation
 from web.backend.services import upload_service
@@ -16,7 +17,7 @@ app = FastAPI(
         "Interactive web interface for the Absynthe GNN explainability "
         "benchmarking framework."
     ),
-    version="0.1.0",
+    version=__version__,
 )
 
 app.add_middleware(
@@ -36,7 +37,7 @@ app.include_router(dataset.router, prefix="/api/dataset", tags=["dataset"])
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"status": "ok"}
+    return {"status": "ok", "version": __version__}
 
 
 @app.on_event("shutdown")

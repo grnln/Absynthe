@@ -72,9 +72,9 @@ class GateMotifGenerator(MotifGenerator):
         return graph
 
     @staticmethod
-    def assign_labels(graph):
+    def assign_labels(graph, arm_length=1):
         """
-        Search for subgraphs shaped like a “gate” and label their nodes.
+        Search for subgraphs shaped like a "gate" with arms of `arm_length` nodes and label their nodes.
         """
-        motif = GateMotifGenerator().generate_motif(0, 1)  # ejemplo: gate con brazo de longitud 1
-        return assign_labels_to_motif(graph, motif, 'gate')
+        motif = GateMotifGenerator().generate_motif(0, arm_length)
+        return assign_labels_to_motif(graph, motif, f'gate_{arm_length}')

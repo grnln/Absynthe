@@ -8,6 +8,7 @@
     "composition": "sequential",
     "composition_params": {},
     "num_extra_vertices": 2,
+    "num_extra_vertices_distribution": { "type": "normal", "params": { "mean": 10, "std": 3 }, "min": 0 },
     "num_extra_edges": 0,
     "perturbations": [
       {
@@ -36,8 +37,7 @@
       "motifs": [
         {
           "type": "house",
-          "count": 1,
-          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 } }
+          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 }, "min": 1 }
         }
       ],
       "labeling_functions": [
@@ -50,8 +50,7 @@
         {
           "type": "cycle",
           "params": [5],
-          "count": 1,
-          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 } }
+          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 }, "min": 1 }
         }
       ],
       "labeling_functions": [
@@ -64,8 +63,7 @@
         {
           "type": "star",
           "params": [5],
-          "count": 1,
-          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 } }
+          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 }, "min": 1 }
         }
       ],
       "labeling_functions": [
@@ -77,20 +75,17 @@
       "motifs": [
         {
           "type": "house",
-          "count": 1,
-          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 } }
+          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 }, "min": 1 }
         },
         {
           "type": "cycle",
           "params": [5],
-          "count": 1,
-          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 } }
+          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 }, "min": 1 }
         },
         {
           "type": "star",
           "params": [5],
-          "count": 1,
-          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 } }
+          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 }, "min": 1 }
         }
       ],
       "labeling_functions": [

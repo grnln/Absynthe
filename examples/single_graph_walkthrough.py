@@ -1,16 +1,28 @@
+"""Walkthrough of the building blocks on a single graph.
+
+Composes three motifs, labels the nodes by motif membership, applies one
+node-removal perturbation through the pipeline, re-labels the perturbed graph
+and renders it to ``pictures/graph.png``.
+
+    python examples/single_graph_walkthrough.py
+"""
 import sys
-sys.path.insert(0, '.')
-from graph.composite_graph_generator import MotifComposite
-from graph.labeling_functions import MotifLabelingFunction
-from graph.perturbations import RemoveNodesPerturbation
-from graph.perturbation_engine import PerturbationPipeline
-from visualize import visualize_graph
+from pathlib import Path
+
 import networkx as nx
-import random
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from graph.composite_graph_generator import MotifComposite  # noqa: E402
+from graph.labeling_functions import MotifLabelingFunction  # noqa: E402
+from graph.perturbations import RemoveNodesPerturbation  # noqa: E402
+from graph.perturbation_engine import PerturbationPipeline  # noqa: E402
+from utils.kg_utils import apply_labeling_result  # noqa: E402
+from utils.rng import set_seed  # noqa: E402
+from utils.visualize import visualize_graph  # noqa: E402
 
 # Global seed: set once here to control all randomness in the framework
-SEED = 42
-random.seed(SEED)
+set_seed(42)
 
 gen = MotifComposite(motifs=[["cycle", 4], ["house"], ["cycle", 3]])
 graph = gen.generate_graph(num_extra_vertices=2, num_extra_edges=3, start=0)
@@ -20,10 +32,7 @@ motif_order = ["house", "cycle_4", "cycle_3"]
 labeling = MotifLabelingFunction(motif_order=motif_order)
 
 # Assign expected ground truth before perturbation
-result = labeling.compute_labels(graph)
-for node, label in result.labels.items():
-    graph.nodes[node]['expected_ground_truth'] = label
-    graph.nodes[node]['label'] = label
+apply_labeling_result(graph, labeling.label(graph), "expected_ground_truth")
 
 for node in graph.nodes():
     print(f"Node {node}: {graph.nodes[node]}")
@@ -46,10 +55,7 @@ if results:
     print("Changed nodes:", result["changed_nodes"])
 
     # Store observed ground truth after perturbation
-    result_after = labeling.compute_labels(perturbed_graph)
-    for node, label in result_after.labels.items():
-        perturbed_graph.nodes[node]['observed_ground_truth'] = label
-        perturbed_graph.nodes[node]['label'] = label
+    apply_labeling_result(perturbed_graph, labeling.label(perturbed_graph), "observed_ground_truth")
 
     print("\nNodes:", list(perturbed_graph.nodes()))
     print("Edges:", list(perturbed_graph.edges()))

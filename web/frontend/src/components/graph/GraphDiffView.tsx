@@ -120,8 +120,11 @@ export function GraphDiffView({
     setSharedPositions(null)
   }, [originalNodeKey])
 
+  // The graph row keeps a minimum height so a long label-change table cannot
+  // collapse it to 0px; the table scrolls internally and the whole view scrolls
+  // as a last resort instead of clipping.
   return (
-    <div className="flex flex-col gap-4 h-full">
+    <div className="flex flex-col gap-4 h-full min-h-0 overflow-y-auto">
       {/* Summary badges */}
       {(changedNodes.length > 0 || removedNodes.length > 0) && (
         <div className="flex flex-wrap gap-2 items-center">
@@ -136,12 +139,12 @@ export function GraphDiffView({
             </Badge>
           )}
           {addedEdges.length > 0 && (
-            <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+            <Badge variant="success">
               +{addedEdges.length} edge{addedEdges.length !== 1 ? 's' : ''}
             </Badge>
           )}
           {removedEdges.length > 0 && (
-            <Badge className="bg-red-500/20 text-red-300 border-red-500/30">
+            <Badge variant="error">
               −{removedEdges.length} edge{removedEdges.length !== 1 ? 's' : ''}
             </Badge>
           )}
@@ -149,7 +152,7 @@ export function GraphDiffView({
       )}
 
       {/* Side-by-side graphs */}
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className="flex gap-4 flex-1 min-h-[360px]">
         <div className="flex flex-col flex-1 min-w-0">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Before</p>
           <div className="flex-1 rounded-xl border border-white/10 overflow-hidden">
@@ -203,8 +206,9 @@ export function GraphDiffView({
             Label changes
           </p>
           <div className="rounded-lg border border-white/10 overflow-hidden">
+            <div className="max-h-64 overflow-y-auto">
             <table className="w-full text-xs">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-white dark:bg-gray-900">
                 <tr className="border-b border-white/10 bg-white/5">
                   <th className="text-left px-3 py-2 text-gray-500 font-medium">Node</th>
                   <th className="text-left px-3 py-2 text-gray-500 font-medium">Before</th>
@@ -236,6 +240,7 @@ export function GraphDiffView({
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}

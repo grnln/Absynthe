@@ -9,10 +9,12 @@ Two configuration sources are supported:
     `DatasetGenerateRequest` model used by the web backend, so an experiment
     can be reproduced from a single file.
 
-Examples
-    python gen_dataset.py                    # Python mode (DATASET_CONFIGS)
-    python gen_dataset.py configs/default.json
-    python gen_dataset.py --json             # equivalent to the previous line
+Run from the repository root (relative paths such as `datasets/` and
+`configs/` resolve against the current directory):
+
+    python scripts/gen_dataset.py                    # Python mode (DATASET_CONFIGS)
+    python scripts/gen_dataset.py configs/default.json
+    python scripts/gen_dataset.py --json             # equivalent to the previous line
 """
 from __future__ import annotations
 
@@ -22,16 +24,20 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-from utils.rng import set_seed, reset_rng
-from graph.random_motif_composite import RandomMotifComposite
-from graph.dataset_generator import GraphDatasetGenerator
-from graph.labeling_functions import MotifLabelingFunction
-from graph.perturbations import (
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from utils.rng import set_seed, reset_rng  # noqa: E402
+from graph.composite_graph_generator import MotifComposite  # noqa: E402
+from graph.dataset_generator import GraphDatasetGenerator  # noqa: E402
+from graph.labeling_functions import MotifLabelingFunction  # noqa: E402
+from graph.perturbations import (  # noqa: E402
     RemoveNodesPerturbation,
     RemoveEdgesPerturbation,
     EdgePerturbation,
 )
-from utils.distributions import IntDistribution
+from utils.distributions import IntDistribution  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -43,7 +49,9 @@ NUM_GRAPHS = 300
 DATASETS_ROOT = "datasets"
 CLEAN_OUTPUT = True
 
-# Normal distribution centered at 3 with std=1 -> mostly 2-4 motifs per graph
+# Normal distribution centered at 3 with std=1 -> mostly 2-4 motifs per graph.
+# Each motif entry is (motif, count): count is an int or a distribution
+# re-sampled for every graph.
 count_dist = IntDistribution("normal", {"mean": 3, "std": 1})
 
 DATASET_CONFIGS = [
@@ -51,21 +59,21 @@ DATASET_CONFIGS = [
     {
         "name": "house",
         "motifs": [
-            (["house"], 1, count_dist),
+            (["house"], count_dist),
         ],
         "motif_order": ["house"],
     },
     {
         "name": "cycle_5",
         "motifs": [
-            (["cycle", 5], 1, count_dist),
+            (["cycle", 5], count_dist),
         ],
         "motif_order": ["cycle_5"],
     },
     {
         "name": "star_5",
         "motifs": [
-            (["star", 5], 1, count_dist),
+            (["star", 5], count_dist),
         ],
         "motif_order": ["star_5"],
     },
@@ -73,9 +81,9 @@ DATASET_CONFIGS = [
     {
         "name": "house_cycle5_star5",
         "motifs": [
-            (["house"], 1, IntDistribution("normal", {"mean": 2, "std": 1})),
-            (["cycle", 5], 1, IntDistribution("normal", {"mean": 2, "std": 1})),
-            (["star", 5], 1, IntDistribution("normal", {"mean": 2, "std": 1})),
+            (["house"], IntDistribution("normal", {"mean": 2, "std": 1})),
+            (["cycle", 5], IntDistribution("normal", {"mean": 2, "std": 1})),
+            (["star", 5], IntDistribution("normal", {"mean": 2, "std": 1})),
         ],
         "motif_order": ["house", "cycle_5", "star_5"],
     },
@@ -91,7 +99,7 @@ def _datasets_from_python_configs() -> List[Dict[str, Any]]:
     datasets: List[Dict[str, Any]] = []
     for config in DATASET_CONFIGS:
         name = config["name"]
-        graph_gen = RandomMotifComposite(motif_configs=config["motifs"])
+        graph_gen = MotifComposite(motifs=config["motifs"])
         labeling = [MotifLabelingFunction(motif_order=config["motif_order"])]
         perturbations = [
             (RemoveNodesPerturbation(num_nodes=1, strategy="motif", folder_name="remove_nodes"), 1),
@@ -107,7 +115,7 @@ def _datasets_from_python_configs() -> List[Dict[str, Any]]:
             "max_perturbation_iterations": 15,
             "gen_kwargs": {
                 "num_graphs": NUM_GRAPHS,
-                "num_extra_vertices": 2,
+                "num_extra_vertices": 0,
                 "num_extra_edges": 0,
                 "composition": "sequential",
             },
@@ -124,12 +132,13 @@ def _datasets_from_json(path: str | Path) -> tuple[List[Dict[str, Any]], int | N
     from utils.dataset_config import load_dataset_config
     from web.backend.services.registry import (
         build_graph_generator,
+        build_graph_kwargs,
         build_labeling_functions,
         build_perturbations,
-        normalize_composition_params,
     )
 
     suite = load_dataset_config(path)
+    config_path = Path(path).resolve().as_posix()
     datasets: List[Dict[str, Any]] = []
     for name, request in zip(suite.names, suite.datasets):
         datasets.append({
@@ -139,13 +148,16 @@ def _datasets_from_json(path: str | Path) -> tuple[List[Dict[str, Any]], int | N
             "perturbations": build_perturbations(request.perturbations),
             "output_dir": request.output_dir,
             "max_perturbation_iterations": request.max_perturbation_iterations,
-            "gen_kwargs": {
-                "num_graphs": request.num_graphs,
-                "num_extra_vertices": request.num_extra_vertices,
-                "num_extra_edges": request.num_extra_edges,
-                "composition": request.composition,
-                "composition_params": normalize_composition_params(request.composition_params),
-            },
+            "formats": request.formats,
+            # Recorded in metadata.json so the dataset can be replayed from
+            # its own folder. A per-dataset `seed` (set in the JSON entry or
+            # in `shared`) re-seeds the RNG right before that dataset.
+            "config": request.model_dump(mode="json"),
+            "seed": request.seed,
+            "config_path": config_path,
+            # Extras with a `*_distribution` in the JSON arrive here as
+            # IntDistribution objects and are re-sampled for every graph.
+            "gen_kwargs": {"num_graphs": request.num_graphs, **build_graph_kwargs(request)},
         })
     return datasets, suite.seed, suite.clean_output
 
@@ -169,9 +181,29 @@ def run_pipeline(
         shutil.rmtree(root)
         print(f"Cleared existing {root}/ folder.")
 
-    for entry in datasets:
+    for index, entry in enumerate(datasets):
         name = entry["name"]
         print(f"Generating dataset: {name}")
+
+        # A dataset-level seed makes this dataset reproducible on its own;
+        # otherwise it inherits the suite seed and the RNG state left by the
+        # datasets generated before it.
+        dataset_seed = entry.get("seed")
+        if dataset_seed is not None:
+            set_seed(dataset_seed)
+            seed_scope = "dataset"
+        else:
+            seed_scope = "suite" if seed is not None else None
+
+        provenance: Dict[str, Any] = {
+            "dataset_name": name,
+            "suite_index": index,
+            "suite_size": len(datasets),
+            "suite_seed": seed,
+            "seed_scope": seed_scope,
+        }
+        if entry.get("config_path"):
+            provenance["config_path"] = entry["config_path"]
 
         generator = GraphDatasetGenerator(
             graph_generator=entry["graph_generator"],
@@ -179,26 +211,18 @@ def run_pipeline(
             perturbations=entry["perturbations"],
             output_dir=entry["output_dir"],
             max_perturbation_iterations=entry["max_perturbation_iterations"],
+            formats=entry.get("formats"),
+            seed=dataset_seed if dataset_seed is not None else seed,
+            config=entry.get("config"),
+            provenance=provenance,
         )
 
         metadata = generator.generate_dataset(**entry["gen_kwargs"])
         num_graphs = entry["gen_kwargs"]["num_graphs"]
         print(f"  -> {len(metadata)} perturbed variants from {num_graphs} base graphs")
 
-        # print(f"  Saving visualizations...")
-        # for entry in metadata:
-        #     graph = nx.read_graphml(entry["graph_path"])
-        #     title = f"{dataset_name} graph_{entry['graph_id']} (perturbed)"
-        #     filename = entry["graph_path"].replace(".graphml", ".png")
-        #     visualize_graph(graph, title=title, filename=filename)
-    
-        # originals_dir = Path(f"datasets/{dataset_name}/originals")
-        # for orig_path in sorted(originals_dir.glob("*.graphml")):
-        #     graph = nx.read_graphml(str(orig_path))
-        #     title = f"{dataset_name} {orig_path.stem} (original)"
-        #     filename = str(orig_path.with_suffix(".png"))
-        #     visualize_graph(graph, title=title, filename=filename)
-        # print()
+        # To render every graph, use scripts/reconstruct_variant.py on a single
+        # variant or utils.visualize.visualize_graph over the metadata entries.
 
     if seed is not None:
         reset_rng()
@@ -209,7 +233,7 @@ def run_pipeline(
 # CLI
 # ---------------------------------------------------------------------------
 
-DEFAULT_JSON_PATH = "configs/default.json"
+DEFAULT_JSON_PATH = str(REPO_ROOT / "configs" / "default.json")
 
 
 def _parse_args(argv: List[str]) -> argparse.Namespace:

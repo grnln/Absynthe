@@ -1,5 +1,7 @@
 import abc
-import networkx as nx
+
+from .graph_types import GraphLike
+from .labeling_result import LabelingResult
 
 from typing import Any
 from interfaces.labeling_result import LabelingResult
@@ -15,11 +17,12 @@ class LabelingFunction(abc.ABC):
     """
 
     @abc.abstractmethod
-    def label(self, graph: nx.Graph[Any]) -> LabelingResult:
+    def label(self, graph: GraphLike) -> LabelingResult:
         """Label the graph and return results.
 
         Args:
-            graph: The graph to label.
+            graph: The graph to label (any NetworkX graph class; edge
+                labels must be keyed by ``utils.kg_utils.edge_key``).
 
         Returns:
             A LabelingResult with any subset of labels, edge_labels,
