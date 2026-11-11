@@ -13,6 +13,7 @@ class MCTSTree:
         self,
         parent: MCTSTree | None,
         chain: PerturbationChain,
+        chain_type: type[PerturbationChain],
         expansion_heuristics: dict[Perturbation, PerturbationHeuristic[Any]],
         graph: nx.Graph[Any],
         exploration_param: float = math.sqrt(2.0)
@@ -25,6 +26,7 @@ class MCTSTree:
         self.chain = chain
         self.graph = graph
         self.parent = parent
+        self.chain_type = chain_type
         self.expansion_heuristics = expansion_heuristics
         self.initial_heuristics = {p: deepcopy(self.expansion_heuristics[p]) for p in self.expansion_heuristics}
         self.simulation_heuristics = {p: deepcopy(self.expansion_heuristics[p]) for p in self.expansion_heuristics}
@@ -51,7 +53,7 @@ class MCTSTree:
                 self.expansion_heuristics[perturbation] = heuristic
 
                 result = perturbation.apply_heuristic(graph, deepcopy(heuristic))
-                new_chain = self.chain + PerturbationChain([result])                
+                new_chain = self.chain + self.chain_type([result])                
 
                 heuristics = {p: deepcopy(self.initial_heuristics[p]) for p in self.initial_heuristics}
                 heuristics[perturbation].add(heuristic.current())
@@ -59,6 +61,7 @@ class MCTSTree:
                 child = MCTSTree(
                     self,
                     new_chain,
+                    self.chain_type,
                     heuristics,
                     graph
                 )

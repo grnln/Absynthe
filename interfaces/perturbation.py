@@ -1,4 +1,6 @@
 import abc
+import networkx as nx
+
 from typing import Tuple, Dict, Any, Optional
 
 from .graph_types import GraphLike

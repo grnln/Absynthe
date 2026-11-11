@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import random, graphviz
+import random, graphviz, os
 import networkx as nx
 
 from math import sqrt
+from pathlib import Path
 from copy import deepcopy
 from datetime import datetime
 from .mcts_tree import MCTSTree
@@ -503,6 +504,7 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
         self.tree = MCTSTree(
             None,
             self.chain_type([]),
+            self.chain_type,
             expansion_heuristics,
             graph,
             mcts_exploration_param
@@ -546,6 +548,11 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
         return chains
 
     def _visualize_tree(self, tree: MCTSTree) -> None:
+        output_dir = Path(os.getcwd()) / Path('visualizations')
+        
+        if not os.path.isdir(output_dir):
+            os.makedirs(output_dir, exist_ok = True)
+        
         dot = graphviz.Graph(f'MCTS_{datetime.now().strftime("%Y%m%d_%H%M%S")}', format = 'png')
         tree.visualize(dot)
         dot.render(directory = 'visualizations')
