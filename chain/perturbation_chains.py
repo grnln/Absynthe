@@ -4,7 +4,7 @@ import networkx as nx
 
 from typing import Any
 from graph.labeling_helpers import compute_labels
-from interfaces import PerturbationChain, Perturbation, LabelingFunction, AppliedPerturbation, PerturbationHeuristic
+from interfaces import PerturbationChain, Perturbation, LabelingFunction, LabelingResult, AppliedPerturbation, PerturbationHeuristic
 
 class BasePerturbationChain(PerturbationChain):
     def __init__(self, perturbations: list[AppliedPerturbation]) -> None:
@@ -149,3 +149,83 @@ class BasePerturbationChain(PerturbationChain):
 
     def is_valid(self, graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
         return self._check_chain_validity(graph, labeling_functions) and self.check_subchain_validity(graph, labeling_functions)
+
+class NewChangedElementsPerturbationChain(PerturbationChain):
+    def __init__(self, perturbations: list[AppliedPerturbation]) -> None:
+        super().__init__(perturbations)
+
+    def __add__(self, other: PerturbationChain) -> NewChangedElementsPerturbationChain:
+        if not isinstance(other, NewChangedElementsPerturbationChain):
+            raise ValueError('Attempting to extend perturbation chain with perturbation chain of incompatible type.')
+
+        return NewChangedElementsPerturbationChain(self.perturbations + other.perturbations)
+
+    def test_potential_perturbation(
+        self,
+        perturbation: Perturbation,
+        heuristic: PerturbationHeuristic[Any],
+        labeling_functions: list[LabelingFunction],
+        graph: nx.Graph[Any],
+        desired_result: bool = False
+    ) -> AppliedPerturbation | None:
+        new_heuristic = heuristic.next(graph, self)
+
+        if new_heuristic is None:
+            return None
+        
+        return perturbation.apply_heuristic(
+            graph, new_heuristic
+        )
+
+    def test_perturbation(
+        self,
+        index: int,
+        graph: nx.Graph[Any],
+        labeling_functions: list[LabelingFunction],
+        desired_result: bool = False
+    ) -> AppliedPerturbation | None:
+        if index >= len(self):
+            raise ValueError('Perturbation index out of bounds.')
+
+        return self.perturbations[index].perturbation.apply_heuristic(
+            graph, self.perturbations[index].heuristic
+        )
+
+    def check_subchain_validity(self, original_graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
+        return True
+
+    def _get_individual_changes(
+        self,
+        graph: nx.Graph[Any],
+        labeling_functions: list[LabelingFunction],
+        original_result: LabelingResult
+    ) -> tuple[dict[Any, tuple[Any, Any]], dict[tuple[Any, Any], tuple[Any, Any]], dict[Any, tuple[Any, Any]]]:
+        node_changes: dict[Any, tuple[Any, Any]] = dict()
+        edge_changes: dict[tuple[Any, Any], tuple[Any, Any]] = dict()
+        graph_changes: dict[Any, tuple[Any, Any]] = dict()
+        
+        for perturbation in self:
+            applied = perturbation.perturbation.apply_heuristic(graph, perturbation.heuristic)
+            result = compute_labels(applied.graph, labeling_functions)
+            changed_nodes, changed_edges, changed_graphs = self.get_changes(original_result, result)
+
+            node_changes.update(changed_nodes)
+            edge_changes.update(changed_edges)
+            graph_changes.update(changed_graphs)
+        return (node_changes, edge_changes, graph_changes)
+
+    def is_valid(self, graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
+        if len(self) <= 0:
+            return False
+
+        original_result = compute_labels(graph, labeling_functions)
+        final_result = compute_labels(self.perturbations[-1].graph, labeling_functions)
+        
+        all_node_changes, all_edge_changes, all_graph_changes = self.get_changes(original_result, final_result)
+        individual_node_changes, individual_edge_changes, individual_graph_changes = self._get_individual_changes(graph, labeling_functions, original_result)
+
+        new_changed_nodes = set(all_node_changes.keys()) - set(individual_node_changes.keys())
+        new_changed_edges = set(all_edge_changes.keys()) - set(individual_edge_changes.keys())
+        new_changed_graphs = set(all_graph_changes.keys()) - set(individual_graph_changes.keys())
+
+        return (len(new_changed_nodes) > 0 or len(new_changed_edges) > 0 or len(new_changed_graphs) > 0)
