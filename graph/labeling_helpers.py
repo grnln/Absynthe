@@ -1,5 +1,6 @@
 import networkx as nx
 
+from utils.kg_utils import unpack_ref
 from typing import Any, List, Dict, Optional
 from interfaces import GraphLike, LabelingFunction, LabelingResult, PerturbationHint
 

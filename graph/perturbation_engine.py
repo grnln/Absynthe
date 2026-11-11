@@ -1,11 +1,9 @@
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Dict, Any
 
 from .labeling_helpers import compute_labels
 
-from interfaces import Perturbation, LabelingFunction, PerturbationHint, GraphLike
-from interfaces.labeling_result import LabelingResult
+from interfaces import Perturbation, LabelingFunction, GraphLike
 from utils.distributions import CountSpec, resolve_count
-from utils.kg_utils import unpack_ref
 from utils.rng import get_rng
 
 class PerturbationPipeline:
@@ -91,7 +89,7 @@ class PerturbationPipeline:
             - 'desired_count': the count targeted for this call (the sampled
               value when the pair carries a distribution)
         """
-        original_result = compute_labels(graph)
+        original_result = compute_labels(graph, self.labeling_functions)
         results = []
         rng = self.rng or get_rng()
 
@@ -109,7 +107,7 @@ class PerturbationPipeline:
                 )
 
                 # Check for label changes
-                candidate_result = self._compute_labels(candidate_graph)
+                candidate_result = compute_labels(candidate_graph, self.labeling_functions)
                 changed_nodes = self._diff(original_result.node_labels, candidate_result.node_labels)
                 changed_edges = self._diff(original_result.edge_labels, candidate_result.edge_labels)
                 changed_graph = self._diff(original_result.graph_labels, candidate_result.graph_labels)

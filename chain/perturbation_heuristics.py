@@ -551,7 +551,14 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
         output_dir = Path(os.getcwd()) / Path('visualizations')
         
         if not os.path.isdir(output_dir):
+            print('Creating visualizations directory...')
             os.makedirs(output_dir, exist_ok = True)
+        else:
+            print('Clearing existing visualizations directory...')
+            
+            for _, _, filenames in os.walk(output_dir):
+                for filename in filenames:
+                    os.remove(output_dir / Path(filename))
         
         dot = graphviz.Graph(f'MCTS_{datetime.now().strftime("%Y%m%d_%H%M%S")}', format = 'png')
         tree.visualize(dot)
