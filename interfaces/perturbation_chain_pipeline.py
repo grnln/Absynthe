@@ -31,12 +31,16 @@ class PerturbationChainPipeline(abc.ABC):
         self.labeling_functions = labeling_functions
         self.heuristics = {perturbation: heuristic for perturbation, heuristic in perturbations}
         self.running_time = 0
+        self.num_iterations = 0
 
     @abstractmethod
     def _find_chains(self, chain_length: int) -> set[PerturbationChain]:
         pass
 
     def find(self) -> set[PerturbationChain]:
+        self.running_time = 0
+        self.num_iterations = 0
+
         start_time = time.time()
         out: set[PerturbationChain] = set()
 

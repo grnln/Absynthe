@@ -29,7 +29,9 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
         chains: set[PerturbationChain],
         num_chains: int | None
     ) -> None:
-        if num_chains is not None and len(chains) >= num_chains:
+        self.num_iterations += 1
+        
+        if (num_chains is not None and len(chains) >= num_chains) or (self.max_iterations is not None and self.num_iterations > self.max_iterations):
             return
         
         if len(chain) >= chain_length:
@@ -73,11 +75,10 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
         chains: set[PerturbationChain] = set()
     
         for perturbation in self.perturbations:
-            num_iterations = 0
             heuristic: PerturbationHeuristic[Any] | None = self.heuristics[perturbation]
 
             while heuristic is not None and (
-                self.max_iterations is None or num_iterations < self.max_iterations
+                self.max_iterations is None or self.num_iterations < self.max_iterations
             ) and (
                 self.num_chains is None or len(chains) < self.num_chains
             ):
@@ -99,7 +100,6 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
                     chains,
                     self.num_chains
                 )
-                num_iterations += 1
 
         for perturbation in self.heuristics:
             self.heuristics[perturbation].reset()
@@ -144,7 +144,9 @@ class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
         num_chains: int | None,
         heuristic: MCTSPerturbationHeuristic
     ) -> None:
-        if num_chains is not None and len(chains) >= num_chains:
+        self.num_iterations += 1
+        
+        if (num_chains is not None and len(chains) >= num_chains) or (self.max_iterations is not None and self.num_iterations > self.max_iterations):
             return
         
         if len(chain) >= chain_length:
@@ -185,11 +187,10 @@ class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
         chains = chains.union(self.training_found_chains)
     
         for perturbation in self.perturbations:
-            num_iterations = 0
             heuristic = self.heuristic
 
             while heuristic is not None and (
-                self.max_iterations is None or num_iterations < self.max_iterations
+                self.max_iterations is None or self.num_iterations < self.max_iterations
             ) and (
                 self.num_chains is None or len(chains) < self.num_chains
             ):
@@ -214,7 +215,6 @@ class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
                     self.num_chains,
                     new_heuristic
                 )
-                num_iterations += 1
 
         for perturbation in self.heuristics:
             self.heuristics[perturbation].reset()
