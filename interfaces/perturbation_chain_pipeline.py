@@ -1,37 +1,40 @@
 import abc
 import time
-import networkx as nx
 
 from typing import Any
 from abc import abstractmethod
 
-from interfaces.perturbation import Perturbation
-from interfaces.perturbation_heuristic import PerturbationHeuristic
-from interfaces.labeling_function import LabelingFunction
-
+from .graph_types import GraphLike
+from .perturbation import Perturbation
+from .labeling_function import LabelingFunction
 from .perturbation_chain import PerturbationChain
+from .perturbation_heuristic import PerturbationHeuristic
 
 class PerturbationChainPipeline(abc.ABC):
     def __init__(
         self,
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]],
         labeling_functions: list[LabelingFunction],
         chain_type: type[PerturbationChain],
-        max_length: int,
-        max_iterations: int | None = None,
-        num_chains: int | None = None
+        **kwargs: Any
     ) -> None:
         self.graph = graph
-        self.max_length = max_length
         self.chain_type = chain_type
-        self.num_chains = num_chains
-        self.max_iterations = max_iterations
         self.perturbations = [perturbation for perturbation, _ in perturbations]
         self.labeling_functions = labeling_functions
         self.heuristics = {perturbation: heuristic for perturbation, heuristic in perturbations}
-        self.running_time = 0
-        self.num_iterations = 0
+
+        self.running_time: float = 0.0
+        self.num_iterations: int = 0
+
+        self.ordered: bool = self._get_arg('ordered', False, **kwargs)
+        self.max_length: int = self._get_arg('max_length', 4, **kwargs)
+        self.num_chains: int | None = self._get_arg('num_chains', None, **kwargs)
+        self.max_iterations: int | None = self._get_arg('max_iterations', None, **kwargs)
+
+    def _get_arg(self, key: str, default: Any, **kwargs: Any) -> Any:
+        return kwargs[key] if key in kwargs else default
 
     @abstractmethod
     def _find_chains(self, chain_length: int) -> set[PerturbationChain]:

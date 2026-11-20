@@ -1,8 +1,7 @@
 import random
-import networkx as nx
 
 from typing import Optional, Dict, Any, Tuple, List
-from interfaces import Perturbation, PerturbationHint, AppliedPerturbation, GraphLike
+from interfaces import GraphLike, Perturbation, PerturbationHint, AppliedPerturbation, GraphLike
 
 from .perturbation_strategies import STRATEGY_MAP
 from utils.kg_utils import (
@@ -18,7 +17,7 @@ from utils.kg_utils import (
 )
 from utils.rng import get_rng
 
-from interfaces import PerturbationChain, PerturbationHeuristic
+from interfaces import PerturbationHeuristic
 
 # ---------------------------------------------------------------------------
 # Hint helpers
@@ -179,7 +178,7 @@ class RemoveNodesPerturbation(Perturbation):
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def _get_removed_info(self, graph: nx.Graph[Any], removed: list[Any]) -> list[dict[str, Any]]:
+    def _get_removed_info(self, graph: GraphLike, removed: list[Any]) -> list[dict[str, Any]]:
         removed_info: list[dict[str, Any]] = []
         
         for n in removed:
@@ -204,7 +203,7 @@ class RemoveNodesPerturbation(Perturbation):
         removed_info = self._get_removed_info(graph, removed)
         return new_graph, {"removed_nodes": removed_info}
 
-    def apply_heuristic(self, graph: nx.Graph[Any], heuristic: PerturbationHeuristic[Any]) -> AppliedPerturbation:
+    def apply_heuristic(self, graph: GraphLike, heuristic: PerturbationHeuristic[Any]) -> AppliedPerturbation:
         nodes = list[Any]()
 
         for _ in range(self.num_nodes):
@@ -243,7 +242,7 @@ class RemoveEdgesPerturbation(Perturbation):
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def _get_removed_info(self, graph: nx.Graph[Any], removed: set[tuple[Any, Any]]) -> list[dict[str, Any]]:
+    def _get_removed_info(self, graph: GraphLike, removed: set[tuple[Any, Any]]) -> list[dict[str, Any]]:
         removed_info: list[dict[str, Any]] = [
             {
                 "u": u,
@@ -263,7 +262,7 @@ class RemoveEdgesPerturbation(Perturbation):
         )
         return new_graph, {"removed_edges": removed}
 
-    def apply_heuristic(self, graph: nx.Graph[Any], heuristic: PerturbationHeuristic[tuple[Any, Any]]) -> AppliedPerturbation:
+    def apply_heuristic(self, graph: GraphLike, heuristic: PerturbationHeuristic[tuple[Any, Any]]) -> AppliedPerturbation:
         edges = set[tuple[Any, Any]]()
 
         for _ in range(self.num_edges):            
@@ -302,7 +301,7 @@ class AddEdgesPerturbation(Perturbation):
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def _get_added_info(self, graph: nx.Graph[Any], new_graph: nx.Graph[Any]) -> list[dict[str, Any]]:
+    def _get_added_info(self, graph: GraphLike, new_graph: GraphLike) -> list[dict[str, Any]]:
         added = set(new_graph.edges()) - set(graph.edges())
         added_info = [{"u": u, "v": v} for u, v in added]
         return added_info
@@ -316,7 +315,7 @@ class AddEdgesPerturbation(Perturbation):
         )
         return new_graph, {"added_edges": added}
 
-    def apply_heuristic(self, graph: nx.Graph[Any], heuristic: PerturbationHeuristic[tuple[Any, Any]]) -> AppliedPerturbation:
+    def apply_heuristic(self, graph: GraphLike, heuristic: PerturbationHeuristic[tuple[Any, Any]]) -> AppliedPerturbation:
         edges = set[tuple[Any, Any]]()
 
         if self.add_num is None:
@@ -345,6 +344,7 @@ class EdgePerturbation(Perturbation):
 
     def __init__(self, p_remove: float = 0.0, p_add: float = 0.0,
                  add_num: Optional[int] = None,
+                 remove_num: Optional[int] = None,
                  rng: Optional[random.Random] = None,
                  folder_name: Optional[str] = None,
                  relations: Optional[List[str]] = None,
@@ -352,13 +352,14 @@ class EdgePerturbation(Perturbation):
         self.p_remove = p_remove
         self.p_add = p_add
         self.add_num = add_num
+        self.remove_num = remove_num
         self.rng = rng
         self.relations = relations
         self.add_relation = add_relation
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def _get_change_info(self, graph: nx.Graph[Any], new_graph: nx.Graph[Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    def _get_change_info(self, graph: GraphLike, new_graph: GraphLike) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         before_edges = set(graph.edges())
         after_edges = set(new_graph.edges())
         
@@ -385,32 +386,5 @@ class EdgePerturbation(Perturbation):
             "added_edges": added,
         }
 
-    def apply_heuristic(self, graph: nx.Graph[Any], heuristic: PerturbationHeuristic[tuple[Any, Any]]) -> AppliedPerturbation:
-            edges = set[tuple[tuple[Any, Any], tuple[Any, Any]]]()
-    
-            if self.add_num is None:
-                raise ValueError("The number of edges must be provided to apply the perturbation based on a heuristic.")
-    
-            for _ in range(self.add_num):
-                edge = heuristic.current()
-                edges.add(edge)
-
-            working_graph = graph.copy()
-    
-            for add, remove in edges:
-                for u, v in add:
-                    working_graph.add_edge(u, v)
-
-                for u, v in remove:
-                    working_graph.add_edge(u, v)
-
-            removed_edges, added_edges = self._get_change_info(graph, working_graph)
-            return AppliedPerturbation(
-                self,
-                heuristic,
-                working_graph,
-                {
-                    "removed_edges": removed_edges,
-                    "added_edges": added_edges
-                }
-            )
+    def apply_heuristic(self, graph: GraphLike, heuristic: PerturbationHeuristic[tuple[Any, Any]]) -> AppliedPerturbation:
+        return NotImplementedError('Operation is not implemented for this perturbation type.')

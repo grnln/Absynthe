@@ -1,15 +1,16 @@
 import abc
-import networkx as nx
 
 from typing import Any
 from abc import abstractmethod
 
+from .graph_types import GraphLike
+
 class PerturbationHeuristic[T](abc.ABC):
-    def __init__(self) -> None:
+    def __init__(self, graph: GraphLike, **kwargs: Any) -> None:
         pass
 
     @abstractmethod
-    def next(self, graph: nx.Graph[Any], chain: Any) -> PerturbationHeuristic[T] | None:
+    def next(self, graph: GraphLike, chain: Any) -> PerturbationHeuristic[T] | None:
         pass
 
     @abstractmethod

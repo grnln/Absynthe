@@ -405,7 +405,7 @@ def build_labeling_functions(
     return labeling_functions
 
 
-def build_perturbation(config: PerturbationConfig) -> Perturbation:
+def build_perturbation(config: PerturbationConfig) -> Tuple[Perturbation, dict[str, dict[str, Any]] | None]:
     from graph.perturbations import (
         AddEdgesPerturbation,
         EdgePerturbation,
@@ -439,7 +439,7 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
             strategy=strategy,
             params=strategy_params or None,
             folder_name=folder_name,
-        )
+        ), config.heuristics
 
     relations = _parse_csv_list(params.get("relations")) or None
     add_relation = str(params.get("add_relation")).strip() if params.get("add_relation") else None
@@ -449,7 +449,7 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
             p_remove=_to_float(params.get("p_remove"), 0.1),
             folder_name=folder_name,
             relations=relations,
-        )
+        ), config.heuristics
 
     if cfg_type == "add_edges":
         add_num = _to_int(params.get("add_num"), 0)
@@ -458,7 +458,7 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
             add_num=add_num if add_num > 0 else None,
             folder_name=folder_name,
             add_relation=add_relation,
-        )
+        ), config.heuristics
 
     if cfg_type == "edge_perturbation":
         add_num = _to_int(params.get("add_num"), 0)
@@ -469,7 +469,7 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
             folder_name=folder_name,
             relations=relations,
             add_relation=add_relation,
-        )
+        ), config.heuristics
 
     if cfg_type == "corrupt_triples":
         from graph.kg_perturbations import CorruptTriplesPerturbation
@@ -480,21 +480,23 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
             relations=relations,
             same_type=_to_bool(params.get("same_type"), True),
             folder_name=folder_name,
-        )
+        ), config.heuristics
 
     raise ValueError(f"Unknown perturbation type: {config.type}")
 
 
 def build_perturbations(
     configs: List[PerturbationConfig] | None,
-) -> List[Tuple[Perturbation, CountSpec]]:
+) -> List[Tuple[Perturbation, CountSpec, dict[str, dict[str, Any]] | None]]:
     """``(perturbation, count)`` pairs; ``count`` is the ``IntDistribution``
     when the config has ``count_distribution`` (sampled per base graph)."""
     if not configs:
         return []
+    
+    perturbations = [(cfg, *build_perturbation(cfg)) for cfg in configs]
     return [
-        (build_perturbation(cfg), count_spec(cfg.count, cfg.count_distribution))
-        for cfg in configs
+        (perturbation, count_spec(cfg.count, cfg.count_distribution), heuristics)
+        for cfg, perturbation, heuristics in perturbations
     ]
 
 

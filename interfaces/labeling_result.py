@@ -30,7 +30,7 @@ class LabelingResult:
     """
 
     node_labels: Dict[Any, Any]
-    edge_labels: Dict[Tuple, Any] = field(default_factory=dict)
+    edge_labels: Dict[Tuple[Any, Any], Any] = field(default_factory=dict)
     graph_labels: Dict[str, Any] = field(default_factory=dict)
     details: Dict[Any, Dict[str, Any]] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)

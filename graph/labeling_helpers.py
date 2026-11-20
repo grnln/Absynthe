@@ -1,10 +1,8 @@
-import networkx as nx
-
 from utils.kg_utils import unpack_ref
 from typing import Any, List, Dict, Optional
 from interfaces import GraphLike, LabelingFunction, LabelingResult, PerturbationHint
 
-def compute_labels(graph: nx.Graph[Any], labeling_functions: List[LabelingFunction]) -> LabelingResult:
+def compute_labels(graph: GraphLike, labeling_functions: List[LabelingFunction]) -> LabelingResult:
     """Compute labels using all labeling functions.
     
     Later labeling functions overwrite earlier ones for the same node.

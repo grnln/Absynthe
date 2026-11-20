@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 METADATA_FILENAME = "metadata.json"
+CHAIN_METADATA_FILENAME = "chain_metadata.json"
 CONFIG_FILENAME = "config.json"
 
 # Constructor arguments that are runtime objects rather than configuration.
@@ -150,6 +151,8 @@ def save_metadata(variants: List[Dict[str, Any]], path: str | os.PathLike) -> No
     """Write the variants list as ``metadata.json``."""
     _dump(variants, path)
 
+def save_chain_metadata(data: list[dict[str, Any]], path: str | os.PathLike) -> None:
+    _dump(data, path)
 
 def save_config(doc: Dict[str, Any], path: str | os.PathLike) -> None:
     """Write the provenance document as ``config.json``."""

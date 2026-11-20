@@ -1,36 +1,31 @@
-import networkx as nx
-
 from math import sqrt
 from typing import Any
 from copy import deepcopy
 from .perturbation_heuristics import MCTSPerturbationHeuristic
-from interfaces import Perturbation, PerturbationHeuristic, PerturbationChainPipeline, PerturbationChain, LabelingFunction
+from interfaces import GraphLike, Perturbation, PerturbationHeuristic, PerturbationChainPipeline, PerturbationChain, LabelingFunction
+from .perturbation_chains import chain_types
 
 class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
     def __init__(
         self,
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]],
         labeling_functions: list[LabelingFunction],
         chain_type: type[PerturbationChain],
-        max_length: int = 4,
-        max_iterations: int | None = None,
-        num_chains: int | None = None,
-        ordered: bool = False
+        **kwargs: Any
     ) -> None:
-        super().__init__(graph, perturbations, labeling_functions, chain_type, max_length, max_iterations, num_chains)
-        self.ordered = ordered
+        super().__init__(graph, perturbations, labeling_functions, chain_type, **kwargs)
 
     def _find_chain(
         self,
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         chain: PerturbationChain,
         chain_length: int,
         chains: set[PerturbationChain],
         num_chains: int | None
     ) -> None:
         self.num_iterations += 1
-        
+
         if (num_chains is not None and len(chains) >= num_chains) or (self.max_iterations is not None and self.num_iterations > self.max_iterations):
             return
         
@@ -109,30 +104,26 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
 class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
     def __init__(
         self,
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]],
         labeling_functions: list[LabelingFunction],
         chain_type: type[PerturbationChain],
-        max_length: int = 4,
-        max_training_iterations: int = 1000,
-        mcts_exploration_param: float = sqrt(2.0),
-        num_chains: int | None = None,
-        ordered: bool = False,
-        visualize_tree: bool = False
+        **kwargs: Any
     ) -> None:
-        super().__init__(graph, perturbations, labeling_functions, chain_type, max_length, num_chains = num_chains)
-        self.ordered = ordered
-        self.visualize_tree = visualize_tree
-        self.heuristic = MCTSPerturbationHeuristic(
+        super().__init__(graph, perturbations, labeling_functions, chain_type, **kwargs)
+        self.visualize_tree: bool = self._get_arg('visualize_tree', False, **kwargs)
+        self.max_training_iterations: int = self._get_arg('max_training_iterations', 1000, **kwargs)
+        self.mcts_exploration_param: float = self._get_arg('mcts_exploration_param', sqrt(2.0), **kwargs)
+        self.heuristic: MCTSPerturbationHeuristic = MCTSPerturbationHeuristic(
             graph,
             labeling_functions,
             self.heuristics,
             self.chain_type,
-            max_length,
-            max_training_iterations,
-            mcts_exploration_param,
-            visualize_tree,
-            ordered
+            self.max_length,
+            self.max_training_iterations,
+            self.mcts_exploration_param,
+            self.visualize_tree,
+            self.ordered
         )
         self.training_found_chains = self.heuristic.get_found_chains()
 
@@ -145,7 +136,7 @@ class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
         heuristic: MCTSPerturbationHeuristic
     ) -> None:
         self.num_iterations += 1
-        
+
         if (num_chains is not None and len(chains) >= num_chains) or (self.max_iterations is not None and self.num_iterations > self.max_iterations):
             return
         
@@ -221,3 +212,24 @@ class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
         
         self.heuristic.reset()
         return chains
+
+_pipeline_algorithms: dict[str, type[PerturbationChainPipeline]] = {
+    'heuristic': HeuristicPerturbationChainPipeline,
+    'mcts': MCTSPerturbationChainPipeline
+}
+
+def build_pipeline(
+    algorithm: str,
+    graph: GraphLike,
+    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]],
+    labeling_functions: list[LabelingFunction],
+    chain_type: str,
+    **kwargs: Any
+) -> PerturbationChainPipeline:
+    return _pipeline_algorithms[algorithm](
+        graph,
+        perturbations,
+        labeling_functions,
+        chain_types[chain_type],
+        **kwargs
+    )

@@ -8,7 +8,6 @@ from graph.exporters import DEFAULT_FORMATS
 from web.backend.models.graph_models import ExtrasMixin, LabelingFunctionConfig, MotifConfig
 from web.backend.models.perturbation_models import PerturbationConfig
 
-
 class FolderSourceConfig(BaseModel):
     folder_path: str
     iteration_order: str = "sequential"
@@ -57,6 +56,7 @@ class DatasetGenerateRequest(ExtrasMixin):
     )
     output_dir: str = "datasets/output"
     seed: Optional[int] = None
+    chain_configs: Optional[list[dict[str, Any]]] = Field(None)
 
     @model_validator(mode="after")
     def validate_graph_source(self):

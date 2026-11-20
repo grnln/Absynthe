@@ -1,6 +1,5 @@
-import networkx as nx
-
 from typing import Any
+from .graph_types import GraphLike
 from .perturbation import Perturbation
 from .perturbation_heuristic import PerturbationHeuristic
 
@@ -9,13 +8,17 @@ class AppliedPerturbation:
         self,
         perturbation: Perturbation,
         heuristic: PerturbationHeuristic[Any],
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         changes: dict[str, Any]
     ) -> None:
         self.perturbation = perturbation
         self.heuristic = heuristic
         self.graph = graph
         self.changes = changes
+
+        self.changed_nodes = {}
+        self.changed_edges = {}
+        self.changed_graphs = {}
 
     def __str__(self) -> str:
         return f'{self.perturbation.__class__.__name__}[{str(self.heuristic.current())}]'
@@ -34,3 +37,13 @@ class AppliedPerturbation:
 
     def __hash__(self) -> int:
         return hash((self.perturbation, self.heuristic.current()))
+
+    def set_labeling_changes(
+        self,
+        changed_nodes: dict[Any, tuple[Any, Any]],
+        changed_edges: dict[tuple[Any, Any], tuple[tuple[Any, Any], tuple[Any, Any]]],
+        changed_graphs: dict[Any, tuple[Any, Any]]
+    ) -> None:
+        self.changed_nodes = changed_nodes
+        self.changed_edges = changed_edges
+        self.changed_graphs = changed_graphs

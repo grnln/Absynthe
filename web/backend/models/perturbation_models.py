@@ -17,6 +17,7 @@ class PerturbationConfig(BaseModel):
         description="Random distribution for the variant count, sampled per base graph (overrides count when present)",
     )
     folder_name: Optional[str] = None
+    heuristics: Optional[dict[str, dict[str, Any]]] = Field(None)
 
 
 class PerturbationRequest(BaseModel):

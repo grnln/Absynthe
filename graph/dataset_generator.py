@@ -1,17 +1,20 @@
 import os
 import warnings
+from concurrent.futures import ProcessPoolExecutor
 from typing import Callable, List, Tuple, Dict, Any, Optional, Sequence
 
-from interfaces import GraphGenerator, GraphExporter, LabelingFunction, Perturbation, GraphLike
+from interfaces import GraphGenerator, GraphExporter, LabelingFunction, Perturbation, PerturbationChain, PerturbationHeuristic, GraphLike
 from interfaces.exceptions import GraphSourceExhausted
 from interfaces.labeling_result import LabelingResult
 from graph.dataset_metadata import (
     CONFIG_FILENAME,
     METADATA_FILENAME,
+    CHAIN_METADATA_FILENAME,
     build_config,
     describe_components,
     save_config,
     save_metadata,
+    save_chain_metadata
 )
 from graph.exporters import FormatSpec, export_graph, resolve_exporters
 from graph.perturbation_engine import PerturbationPipeline
@@ -24,6 +27,8 @@ from utils.kg_utils import (
     unpack_ref,
 )
 
+from chain.perturbation_heuristics import build_heuristic
+from chain.perturbation_chain_pipelines import build_pipeline
 
 def _safe_sorted(seq):
     """``sorted`` that falls back to string order for non-comparable items."""
@@ -63,13 +68,14 @@ class GraphDatasetGenerator:
         self,
         graph_generator: GraphGenerator,
         labeling_functions: Optional[List[LabelingFunction]] = None,
-        perturbations: Optional[List[Tuple[Perturbation, CountSpec]]] = None,
+        perturbations: list[tuple[Perturbation, CountSpec, dict[str, dict[str, Any]]]] | None = None,
         output_dir: str = "output",
         max_perturbation_iterations: int = 10,
         formats: Optional[Sequence[FormatSpec]] = None,
         seed: Optional[int] = None,
         config: Optional[Dict[str, Any]] = None,
         provenance: Optional[Dict[str, Any]] = None,
+        chain_configs: list[dict[str, Any]] | None = None
     ):
         """
         Args:
@@ -103,7 +109,14 @@ class GraphDatasetGenerator:
         """
         self.graph_generator = graph_generator
         self.labeling_functions = labeling_functions or []
-        self.perturbations = perturbations or []
+        self.perturbations = [
+            (p, c) for p, c, _ in perturbations
+        ] if perturbations else []
+
+        self.chain_perturbations = [
+            (p, h) for p, _, h in perturbations
+        ] if perturbations and chain_configs else []
+
         self.output_dir = output_dir
         self.max_perturbation_iterations = max_perturbation_iterations
         self.exporters: List[GraphExporter] = resolve_exporters(formats)
@@ -111,6 +124,7 @@ class GraphDatasetGenerator:
         self.config = config
         self.provenance = provenance
         self.last_config: Optional[Dict[str, Any]] = None
+        self.chain_configs = chain_configs
 
         os.makedirs(self.output_dir, exist_ok=True)
         self.originals_dir = os.path.join(self.output_dir, "originals")
@@ -187,11 +201,260 @@ class GraphDatasetGenerator:
                 entry[f"original_{name}_path"] = original_files[name]
         return entry
 
+    def _get_metadata(
+        self,
+        graph: GraphLike,
+        graph_counter: int,
+        base_graph_id: int,
+        original_files: dict[str, str],
+        base_graph_labels: dict[str, Any] | None,
+        base_motif_instances: list[dict[str, Any]] | None,
+        result: dict[str, Any]
+    ) -> dict[str, Any]:
+        perturbed = result["perturbed_graph"]
+        
+        self._compute_and_store_labels(perturbed, 'observed_ground_truth')
+
+        pert_folder = result["perturbation_folder"]
+        pert_dir = self._perturbation_dirs[pert_folder]
+        variant_files = self.save_graph(perturbed, os.path.join(pert_dir, f"graph_{base_graph_id}_{graph_counter}"))
+        perturbation_info: Dict[str, Any] = {
+            "changes": result["changes"]
+        }
+        entry: Dict[str, Any] = {
+            "graph_id": graph_counter,
+            "base_graph_id": base_graph_id,
+            **self._path_entries(variant_files, original_files),
+            "perturbations": [
+                {
+                    "perturbation_name": pert_folder,
+                    "perturbation_info": perturbation_info
+                }
+            ]
+        }
+        if not is_plain(graph):
+            entry["graph_kind"] = graph_kind(graph)
+        if base_graph_labels:
+            entry["graph_labels"] = base_graph_labels
+        if base_motif_instances:
+            entry["motif_instances"] = base_motif_instances
+
+        entry["changed_nodes"] = result["changed_nodes"]
+
+        if result.get("changed_edges"):
+            entry["changed_edges"] = self._serialize_changed_edges(
+                result["changed_edges"]
+            )
+        if result.get("changed_graph_labels"):
+            entry["changed_graph_labels"] = result["changed_graph_labels"]
+        return entry
+
+    def _get_chain_metadata(
+        self,
+        graph: GraphLike,
+        graph_counter: int,
+        base_graph_id: int,
+        original_files: dict[str, str],
+        base_graph_labels: dict[str, Any] | None,
+        base_motif_instances: list[dict[str, Any]] | None,
+        chain: PerturbationChain
+    ) -> dict[str, Any]:
+        last = chain[-1]
+        perturbed = last.graph
+        pert_folder = f'chain_{chain.chain_type()}_{len(chain)}'
+        pert_dir = os.path.join(self.output_dir, pert_folder)
+        changed_nodes, changed_edges, changed_graphs = chain.get_final_changes(graph, self.labeling_functions)
+
+        os.makedirs(pert_dir, exist_ok = True)
+        self._compute_and_store_labels(perturbed, 'observed_ground_truth')
+        variant_files = self.save_graph(perturbed, os.path.join(pert_dir, f"graph_{base_graph_id}_{graph_counter}"))
+
+        entry: Dict[str, Any] = {
+            "graph_id": graph_counter,
+            "base_graph_id": base_graph_id,
+            **self._path_entries(variant_files, original_files),
+            "perturbations": []
+        }
+
+        for perturbation in chain:
+            perturbation_info: Dict[str, Any] = {
+                "changes": perturbation.changes
+            }
+
+            entry["perturbations"].append(
+                {
+                    "perturbation_name": perturbation.perturbation.folder_name,
+                    "perturbation_info": perturbation_info
+                }
+            )
+        
+        if not is_plain(graph):
+            entry["graph_kind"] = graph_kind(graph)
+        if base_graph_labels:
+            entry["graph_labels"] = base_graph_labels
+        if base_motif_instances:
+            entry["motif_instances"] = base_motif_instances
+
+        entry["changed_nodes"] = changed_nodes
+        entry["changed_edges"] = self._serialize_changed_edges(changed_edges)
+        entry["changed_graph_labels"] = changed_graphs
+        return entry
+
+    def _generate_graph_dataset_wrapper(
+        self,
+        args: tuple[int, int, Callable[[int, int], None], Any]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        index, num_graphs, progress_callback, graph_kwargs = args
+        return self._generate_graph_dataset(
+            index,
+            num_graphs,
+            progress_callback,
+            **graph_kwargs
+        )
+
+    def _generate_graph_dataset(
+        self,
+        index: int,
+        num_graphs: int,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        **graph_kwargs: Any,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        metadata: list[dict[str, Any]] = []
+        chain_metadata: list[dict[str, Any]] = []
+
+        try:
+            graph = self.graph_generator.generate_graph(**graph_kwargs)
+        except GraphSourceExhausted as e:
+            warnings.warn(
+                f"Graph source exhausted after {e.loaded} graphs "
+                f"(requested {e.requested}). Stopping generation early."
+            )
+            return
+
+        graph_counter = 0
+        labeling_result = None
+        
+        if self.labeling_functions:
+            labeling_result = self._compute_and_store_labels(graph, 'expected_ground_truth')
+        
+        base_graph_labels = None
+        base_motif_instances: list[dict[str, Any]] | None = None
+        
+        if labeling_result:
+            if labeling_result.graph_labels:
+                base_graph_labels = dict(labeling_result.graph_labels)
+        
+            instances = labeling_result.metadata.get("instances")
+        
+            if instances:
+                base_motif_instances = [
+                    {
+                        "motif_name": inst["motif_name"],
+                        "nodes": _safe_sorted(inst["nodes"]),
+                        "edges": _safe_sorted([list(e) for e in inst["edges"]]),
+                    }
+                    for inst in instances
+                ]
+        
+        original_files = self.save_graph(graph, os.path.join(self.originals_dir, f"graph_{index}"))
+        
+        if self.perturbations and self.labeling_functions:
+            pipeline = PerturbationPipeline(
+                perturbations=self.perturbations,
+                labeling_functions=self.labeling_functions,
+                max_iterations=self.max_perturbation_iterations,
+            )
+            results = pipeline.apply_and_check(graph)
+        
+            for result in results:
+                entry = self._get_metadata(
+                    graph,
+                    graph_counter,
+                    index,
+                    original_files,
+                    base_graph_labels,
+                    base_motif_instances,
+                    result
+                )
+                metadata.append(entry)
+                graph_counter += 1
+        
+            if self.chain_configs:                    
+                for config in self.chain_configs:
+                    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = []
+        
+                    for perturbation, heuristics in self.chain_perturbations:
+                        if config['name'] not in heuristics:
+                            continue
+                        
+                        heuristic_config = heuristics[config['name']]
+                        heuristic_kwargs: dict[str, Any] = heuristic_config['kwargs'] if 'kwargs' in heuristic_config else {}
+                        heuristic = build_heuristic(
+                            heuristic_config['name'],
+                            graph,
+                            **heuristic_kwargs
+                        )
+                        perturbations.append((perturbation, heuristic))
+                    
+                    pipeline = build_pipeline(
+                        config['algorithm'],
+                        graph,
+                        perturbations,
+                        self.labeling_functions,
+                        config['chain_type'],
+                        **config['kwargs']
+                    )
+                    chains = pipeline.find()
+                    found_chains: list[tuple[int, int]] = []
+        
+                    for chain_length in range(2, pipeline.max_length + 1):
+                        found_chains.append(
+                            (
+                                chain_length,
+                                len({chain for chain in chains if len(chain) == chain_length})
+                            )
+                        )
+        
+                    chain_metadata.append(
+                        {
+                            'name': config['name'],
+                            'base_graph_id': index,
+                            'algorithm': config['algorithm'],
+                            'kwargs': config['kwargs'],
+                            'iterations': pipeline.num_iterations,
+                            'running_time': pipeline.running_time,
+                            'found_chains': [
+                                {
+                                    'length': t[0],
+                                    'amount': t[1]
+                                } for t in found_chains
+                            ]
+                        }
+                    )
+        
+                    for chain in chains:
+                        entry = self._get_chain_metadata(
+                            graph,
+                            graph_counter,
+                            index,
+                            original_files,
+                            base_graph_labels,
+                            base_motif_instances,
+                            chain
+                        )
+                        metadata.append(entry)
+                        graph_counter += 1
+        
+        if progress_callback is not None:
+            progress_callback(index + 1, num_graphs)
+
+        return (metadata, chain_metadata)
+
     def generate_dataset(
         self,
         num_graphs: int,
         progress_callback: Optional[Callable[[int, int], None]] = None,
-        **graph_kwargs,
+        **graph_kwargs: Any,
     ) -> List[Dict[str, Any]]:
         """Generate a dataset of perturbed graph variants.
 
@@ -233,86 +496,28 @@ class GraphDatasetGenerator:
             content of ``metadata.json``). The provenance document written
             to ``config.json`` is available as ``self.last_config``.
         """
-        metadata = []
-        graph_counter = 0
+        metadata: list[dict[str, Any]] = []
+        chain_metadata: list[dict[str, Any]] = []
+        args = [
+            (
+                i,
+                num_graphs,
+                progress_callback,
+                graph_kwargs
+            ) for i in range(num_graphs)
+        ]
 
-        for i in range(num_graphs):
-            try:
-                graph = self.graph_generator.generate_graph(**graph_kwargs)
-            except GraphSourceExhausted as e:
-                warnings.warn(
-                    f"Graph source exhausted after {e.loaded} graphs "
-                    f"(requested {e.requested}). Stopping generation early."
-                )
-                break
+        with ProcessPoolExecutor(max_workers = 4) as pool:
+            results = pool.map(self._generate_graph_dataset_wrapper, args)
 
-            labeling_result = None
-            if self.labeling_functions:
-                labeling_result = self._compute_and_store_labels(graph, 'expected_ground_truth')
-
-            base_graph_labels = None
-            base_motif_instances = None
-            if labeling_result:
-                if labeling_result.graph_labels:
-                    base_graph_labels = dict(labeling_result.graph_labels)
-                instances = labeling_result.metadata.get("instances")
-                if instances:
-                    base_motif_instances = [
-                        {
-                            "motif_name": inst["motif_name"],
-                            "nodes": _safe_sorted(inst["nodes"]),
-                            "edges": _safe_sorted([list(e) for e in inst["edges"]]),
-                        }
-                        for inst in instances
-                    ]
-
-            original_files = self.save_graph(graph, os.path.join(self.originals_dir, f"graph_{i}"))
-
-            if self.perturbations and self.labeling_functions:
-                pipeline = PerturbationPipeline(
-                    perturbations=self.perturbations,
-                    labeling_functions=self.labeling_functions,
-                    max_iterations=self.max_perturbation_iterations,
-                )
-                results = pipeline.apply_and_check(graph)
-
-                for result in results:
-                    perturbed = result["perturbed_graph"]
-                    self._compute_and_store_labels(perturbed, 'observed_ground_truth')
-
-                    pert_folder = result["perturbation_folder"]
-                    pert_dir = self._perturbation_dirs[pert_folder]
-                    variant_files = self.save_graph(perturbed, os.path.join(pert_dir, f"graph_{graph_counter}"))
-                    perturbation_info: Dict[str, Any] = {
-                        "changes": result["changes"],
-                        "changed_nodes": result["changed_nodes"],
-                    }
-                    if result.get("changed_edges"):
-                        perturbation_info["changed_edges"] = self._serialize_changed_edges(
-                            result["changed_edges"]
-                        )
-                    if result.get("changed_graph_labels"):
-                        perturbation_info["changed_graph_labels"] = result["changed_graph_labels"]
-                    entry: Dict[str, Any] = {
-                        "graph_id": graph_counter,
-                        "base_graph_id": i,
-                        **self._path_entries(variant_files, original_files),
-                        "perturbation_name": pert_folder,
-                        "perturbation_info": perturbation_info,
-                    }
-                    if not is_plain(graph):
-                        entry["graph_kind"] = graph_kind(graph)
-                    if base_graph_labels:
-                        entry["graph_labels"] = base_graph_labels
-                    if base_motif_instances:
-                        entry["motif_instances"] = base_motif_instances
-                    metadata.append(entry)
-                    graph_counter += 1
-
-            if progress_callback is not None:
-                progress_callback(i + 1, num_graphs)
+            for entry, chain_entry in results:
+                metadata.extend(entry)
+                chain_metadata.extend(chain_entry)
 
         self.save_metadata(metadata, os.path.join(self.output_dir, METADATA_FILENAME))
+
+        if self.chain_configs:
+            self.save_chain_metadata(chain_metadata, os.path.join(self.output_dir, CHAIN_METADATA_FILENAME))
 
         self.last_config = build_config(
             seed=self.seed if self.seed is not None else get_seed(),
@@ -344,3 +549,6 @@ class GraphDatasetGenerator:
     def save_metadata(self, metadata, path):
         """Save the variants list to a JSON file."""
         save_metadata(metadata, path)
+
+    def save_chain_metadata(self, metadata: list[dict[str, Any]], path: os.PathLike) -> None:
+        save_chain_metadata(metadata, path)

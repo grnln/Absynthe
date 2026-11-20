@@ -3,17 +3,17 @@ import networkx as nx
 from typing import Any
 from graph.composite_graph_generator import MotifComposite
 
-from graph.perturbations import RemoveEdgesPerturbation
+from graph.perturbations import RemoveEdgesPerturbation, RemoveNodesPerturbation
 from chain.perturbation_chains import BasePerturbationChain
 from chain.perturbation_chain_pipelines import  HeuristicPerturbationChainPipeline, MCTSPerturbationChainPipeline
-from interfaces import LabelingFunction, LabelingResult, PerturbationHeuristic, Perturbation
-from chain.perturbation_heuristics import NaturalOrderEdgePerturbationHeuristic, RandomEdgePerturbationHeuristic, ConnectedComponentsEdgePerturbationHeuristic
+from interfaces import GraphLike, LabelingFunction, LabelingResult, PerturbationHeuristic, Perturbation
+from chain.perturbation_heuristics import NaturalOrderEdgePerturbationHeuristic, RandomEdgePerturbationHeuristic, ConnectedComponentsNodePerturbationHeuristic
 
 class TestLabelingFunction(LabelingFunction):
     def __init__(self):
         pass
     
-    def label(self, graph: nx.Graph[Any]) -> LabelingResult:
+    def label(self, graph: GraphLike) -> LabelingResult:
         work_graph = graph.copy()
 
         # Clear any pre-existing 'label' attributes so that nodes which
@@ -42,7 +42,7 @@ def test_square() -> None:
     graph = gen.generate_graph()
     labeling = TestLabelingFunction()
 
-    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveEdgesPerturbation(p_remove = 0.5), NaturalOrderEdgePerturbationHeuristic())]
+    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveNodesPerturbation(num_nodes = 1), ConnectedComponentsNodePerturbationHeuristic(graph))]
     pipeline = HeuristicPerturbationChainPipeline(
         graph,
         perturbations,
@@ -60,7 +60,7 @@ def test_k5() -> None:
     graph = nx.complete_graph(5)
     labeling = TestLabelingFunction()
 
-    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveEdgesPerturbation(0.5), NaturalOrderEdgePerturbationHeuristic())]
+    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveEdgesPerturbation(0.5), NaturalOrderEdgePerturbationHeuristic(graph))]
     pipeline = HeuristicPerturbationChainPipeline(
         graph,
         perturbations,

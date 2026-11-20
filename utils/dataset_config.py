@@ -27,6 +27,7 @@ class DatasetSuiteConfig:
     datasets_root: str
     datasets: List[DatasetGenerateRequest] = field(default_factory=list)
     names: List[str] = field(default_factory=list)
+    chain_configs: list[dict[str, Any]] = field(default_factory = list)
 
 
 def _merge(shared: Dict[str, Any], entry: Dict[str, Any]) -> Dict[str, Any]:
@@ -48,6 +49,11 @@ def load_dataset_config(path: str | Path) -> DatasetSuiteConfig:
     shared = raw.get("shared", {}) or {}
     if not isinstance(shared, dict):
         raise ValueError("'shared' must be an object if present")
+
+    chain_configs = []
+
+    if 'chain_configs' in shared:
+        chain_configs = shared['chain_configs']
 
     datasets_root = raw.get("datasets_root", "datasets")
     requests: List[DatasetGenerateRequest] = []
@@ -79,4 +85,5 @@ def load_dataset_config(path: str | Path) -> DatasetSuiteConfig:
         datasets_root=datasets_root,
         datasets=requests,
         names=names,
+        chain_configs = chain_configs
     )

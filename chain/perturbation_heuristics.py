@@ -3,20 +3,20 @@ from __future__ import annotations
 import random, graphviz, os
 import networkx as nx
 
-from math import sqrt
+from math import sqrt, inf
 from pathlib import Path
 from copy import deepcopy
 from datetime import datetime
 from .mcts_tree import MCTSTree
 from typing import Any, Callable
-from interfaces import LabelingFunction
-from interfaces import Perturbation, PerturbationHeuristic, PerturbationChain, AppliedPerturbation
+from interfaces import GraphLike, LabelingFunction, Perturbation, PerturbationHeuristic, PerturbationChain, AppliedPerturbation
 
 class NaturalOrderNodePerturbationHeuristic(PerturbationHeuristic[Any]):
-    def __init__(self) -> None:
+    def __init__(self, graph: GraphLike, **kwargs: Any) -> None:
+        super().__init__(graph, **kwargs)
         self.traversed_nodes: list[Any] = []
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
         candidate_nodes = sorted([n for n in list(graph.nodes) if n not in self.traversed_nodes])
 
         if len(candidate_nodes) > 0:
@@ -43,10 +43,11 @@ class NaturalOrderNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         self.traversed_nodes.append(element)
 
 class NaturalOrderEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
-    def __init__(self) -> None:
+    def __init__(self, graph: GraphLike, **kwargs: Any) -> None:
+        super().__init__(graph, **kwargs)
         self.traversed_edges: list[tuple[Any, Any]] = []
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
         candidate_edges = sorted([e for e in list(graph.edges) if e not in self.traversed_edges], key = lambda x: x[0])
 
         if len(candidate_edges) > 0:
@@ -76,19 +77,28 @@ node_perturbation_types: set[str] = {
     'removed_nodes'
 }
 
-def node_graph_distance(a: Any, b: Any, graph: nx.Graph[Any]) -> float:
-    return nx.shortest_path_length(graph, source = a, target = b) # type: ignore
+def node_graph_distance(a: Any, b: Any, graph: GraphLike) -> float:
+    return nx.shortest_path_length(graph, source = a, target = b) if nx.has_path(graph, a, b) else inf # type: ignore
 
-def node_euclidean_distance(a: Any, b: Any, graph: nx.Graph[Any]) -> float:
+def node_euclidean_distance(a: Any, b: Any, graph: GraphLike) -> float:
     return abs(float(b) - float(a))
 
+node_distance_functions: dict[str, Callable[[Any, Any, nx.Graph[Any]], float]] = {
+    'graph_distance': node_graph_distance,
+    'euclidean_distance': node_euclidean_distance
+}
+
 class ProximityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
-    def __init__(self, graph: nx.Graph[Any], distance_func: Callable[[Any, Any, nx.Graph[Any]], float] = node_graph_distance) -> None:
+    def __init__(self, graph: GraphLike, **kwargs: Any) -> None:
+        super().__init__(graph, **kwargs)
+
         self.graph = graph.copy()
         self.traversed_nodes: list[Any] = []
-        self.distance_func = distance_func
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
+        key = kwargs['distance_func'] if 'distance_func' in kwargs else 'graph_distance'
+        self.distance_func = node_distance_functions[key]
+
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
         perturbed_nodes_raw: list[dict[str, Any]] = []
         
         new_heuristic = deepcopy(self)
@@ -141,10 +151,10 @@ edge_perturbation_types: set[str] = {
     'removed_edges'
 }
 
-def edge_graph_distance(a: tuple[Any, Any], b: tuple[Any, Any], graph: nx.Graph[Any]) -> float:
+def edge_graph_distance(a: tuple[Any, Any], b: tuple[Any, Any], graph: GraphLike) -> float:
     return min([node_graph_distance(u, v, graph) for v in b for u in a])
 
-def edge_euclidean_distance(a: tuple[Any, Any], b: tuple[Any, Any], graph: nx.Graph[Any]) -> float:
+def edge_euclidean_distance(a: tuple[Any, Any], b: tuple[Any, Any], graph: GraphLike) -> float:
     a_u = float(a[0])
     a_v = float(a[1])
 
@@ -152,13 +162,22 @@ def edge_euclidean_distance(a: tuple[Any, Any], b: tuple[Any, Any], graph: nx.Gr
     b_v = float(b[1])
     return sqrt(((b_u - a_u) * (b_u - a_u)) + ((b_v - a_v) * (b_v - a_v)))
 
+edge_distance_functions: dict[str, Callable[[tuple[Any, Any], tuple[Any, Any], nx.Graph[Any]], float]] = {
+    'graph_distance': edge_graph_distance,
+    'euclidean_distance': edge_euclidean_distance
+}
+
 class ProximityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
-    def __init__(self, graph: nx.Graph[Any], distance_func: Callable[[tuple[Any, Any], tuple[Any, Any], nx.Graph[Any]], float] = edge_graph_distance) -> None:
+    def __init__(self, graph: GraphLike, **kwargs: Any) -> None:
+        super().__init__(graph, **kwargs)
+
         self.graph = graph.copy()
         self.traversed_edges: list[tuple[Any, Any]] = []
-        self.distance_func = distance_func
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
+        key = kwargs['distance_func'] if 'distance_func' in kwargs else 'graph_distance'
+        self.distance_func = edge_distance_functions[key]
+
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
         perturbed_edges_raw: list[dict[str, Any]] = []
 
         new_heuristic = deepcopy(self)
@@ -208,11 +227,12 @@ class ProximityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]])
         self.traversed_edges.append(element)
 
 class CentralityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
-    def __init__(self, graph: nx.Graph[Any]):
+    def __init__(self, graph: GraphLike, **kwargs: Any):
+        super().__init__(graph, **kwargs)
         self.traversed_nodes: list[Any] = []
         self.initial_centrality = nx.betweenness_centrality(graph)
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
         centrality = nx.edge_betweenness_centrality(graph)
         candidate_nodes: list[tuple[Any, float]] = []
 
@@ -246,11 +266,12 @@ class CentralityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         self.traversed_nodes.append(element)
 
 class CentralityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
-    def __init__(self, graph: nx.Graph[Any]):
+    def __init__(self, graph: GraphLike, **kwargs: Any):
+        super().__init__(graph, **kwargs)
         self.traversed_edges: list[tuple[Any, Any]] = []
         self.initial_centrality = nx.edge_betweenness_centrality(graph)
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
         centrality = nx.edge_betweenness_centrality(graph)
         candidate_edges: list[tuple[tuple[Any, Any], float]] = []
 
@@ -284,17 +305,18 @@ class CentralityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]
         self.traversed_edges.append(element)
 
 class ConnectedComponentsNodePerturbationHeuristic(PerturbationHeuristic[Any]):
-    def __init__(self):
+    def __init__(self, graph: GraphLike, **kwargs: Any):
+        super().__init__(graph, **kwargs)
         self.traversed_nodes: list[Any] = []
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
         last_perturbed_node = None
         last_perturbed_graph = graph
         candidate_nodes = [n for n in list(graph.nodes) if n not in self.traversed_nodes]
         new_heuristic = deepcopy(self)
         
         for perturbation in reversed(chain):
-            for perturbation_type in edge_perturbation_types:
+            for perturbation_type in node_perturbation_types:
                 if perturbation_type in perturbation.changes:
                     node_dict = perturbation.changes[perturbation_type]
                     last_perturbed_node = node_dict[-1]['id']
@@ -335,7 +357,8 @@ class ConnectedComponentsNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         self.traversed_nodes.append(element)
 
 class ConnectedComponentsEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
-    def __init__(self):
+    def __init__(self, graph: GraphLike, **kwargs: Any):
+        super().__init__(graph, **kwargs)
         self.traversed_edges: list[tuple[Any, Any]] = []
 
     def _weigh_edge(self, edge: tuple[Any, Any], component: set[Any]) -> int:
@@ -350,7 +373,7 @@ class ConnectedComponentsEdgePerturbationHeuristic(PerturbationHeuristic[tuple[A
 
         return weight
 
-    def _try_connected_component(self, graph: nx.Graph[Any], node: Any, edge_distances: dict[tuple[Any, Any], float]) -> tuple[tuple[Any, Any], int] | None:
+    def _try_connected_component(self, graph: GraphLike, node: Any, edge_distances: dict[tuple[Any, Any], float]) -> tuple[tuple[Any, Any], int] | None:
         component = nx.node_connected_component(graph, node)
         edge_weights = {edge: self._weigh_edge(edge, component) for edge in edge_distances}
 
@@ -360,7 +383,7 @@ class ConnectedComponentsEdgePerturbationHeuristic(PerturbationHeuristic[tuple[A
         edge = min(edge_distances.keys(), key = lambda e: (-edge_weights[e], edge_distances[e]))
         return edge, edge_weights[edge]
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
         last_perturbed_edge = None
         last_perturbed_graph = graph
         candidate_edges = [e for e in list(graph.edges) if e not in self.traversed_edges]
@@ -422,10 +445,11 @@ class ConnectedComponentsEdgePerturbationHeuristic(PerturbationHeuristic[tuple[A
         self.traversed_edges.append(element)
 
 class RandomNodePerturbationHeuristic(PerturbationHeuristic[Any]):
-    def __init__(self) -> None:
+    def __init__(self, graph: GraphLike, **kwargs: Any) -> None:
+        super().__init__(graph, **kwargs)
         self.traversed_nodes: list[Any] = []
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
         candidate_nodes = sorted([n for n in list(graph.nodes) if n not in self.traversed_nodes])
 
         if len(candidate_nodes) > 0:
@@ -452,10 +476,11 @@ class RandomNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         self.traversed_nodes.append(element)
 
 class RandomEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
-    def __init__(self) -> None:
+    def __init__(self, graph: GraphLike, **kwargs: Any) -> None:
+        super().__init__(graph, **kwargs)
         self.traversed_edges: list[tuple[Any, Any]] = []
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
         candidate_edges = sorted([e for e in list(graph.edges) if e not in self.traversed_edges], key = lambda x: x[0])
 
         if len(candidate_edges) > 0:
@@ -484,7 +509,7 @@ class RandomEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
 class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
     def __init__(
         self,
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         labeling_functions: list[LabelingFunction],
         expansion_heuristics: dict[Perturbation, PerturbationHeuristic[Any]],
         chain_type: type[PerturbationChain],
@@ -492,8 +517,11 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
         max_training_iterations: int = 100,
         mcts_exploration_param: float = sqrt(2.0),
         visualize_tree: bool = False,
-        ordered: bool = False
+        ordered: bool = False,
+        **kwargs: Any
     ) -> None:
+        super().__init__(graph, **kwargs)
+
         self.graph = graph
         self.chain_type = chain_type
         self.labeling_functions = labeling_functions
@@ -514,7 +542,9 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
         self.traversed_nodes: dict[int, list[MCTSTree]] = {}
 
         print(f'Found {len(self.chains)} chains during training{":" if len(self.chains) > 0 else "."}')
-        print(self.chains)
+
+        if len(self.chains) > 0:
+            print(self.chains)
 
         if visualize_tree:
             self._visualize_tree(self.tree)
@@ -564,7 +594,7 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
         tree.visualize(dot)
         dot.render(directory = 'visualizations')
 
-    def next(self, graph: nx.Graph[Any], chain: PerturbationChain) -> MCTSPerturbationHeuristic | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> MCTSPerturbationHeuristic | None:
         node = self.tree
 
         for perturbation in chain:
@@ -606,3 +636,23 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
 
     def add(self, element: AppliedPerturbation) -> None:
         raise NotImplementedError('Method is not implemented for this class.')
+
+_heuristic_types: dict[str, type[PerturbationHeuristic[Any]]] = {
+    'natural_order_node': NaturalOrderNodePerturbationHeuristic,
+    'natural_order_edge': NaturalOrderEdgePerturbationHeuristic,
+    'random_node': RandomNodePerturbationHeuristic,
+    'random_edge': RandomEdgePerturbationHeuristic,
+    'proximity_node': ProximityNodePerturbationHeuristic,
+    'proximity_edge': ProximityEdgePerturbationHeuristic,
+    'centrality_node': CentralityNodePerturbationHeuristic,
+    'centrality_edge': CentralityEdgePerturbationHeuristic,
+    'connected_components_node': ConnectedComponentsNodePerturbationHeuristic,
+    'connected_components_edge': ConnectedComponentsEdgePerturbationHeuristic
+}
+
+def build_heuristic(
+    name: str,
+    graph: GraphLike,
+    **kwargs: Any
+) -> PerturbationHeuristic[Any]:
+    return _heuristic_types[name](graph, **kwargs)

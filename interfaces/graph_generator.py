@@ -1,5 +1,6 @@
 import abc
 
+from typing import Any
 from .graph_types import GraphLike
 
 
@@ -18,7 +19,7 @@ class GraphGenerator(abc.ABC):
     """
 
     @abc.abstractmethod
-    def generate_graph(self, **kwargs) -> GraphLike:
+    def generate_graph(self, **kwargs: Any) -> GraphLike:
         """Generate a graph.
 
         Args:

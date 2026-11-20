@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import networkx as nx
-
 from typing import Any
 from graph.labeling_helpers import compute_labels
-from interfaces import PerturbationChain, Perturbation, LabelingFunction, LabelingResult, AppliedPerturbation, PerturbationHeuristic
+from interfaces import GraphLike, PerturbationChain, Perturbation, LabelingFunction, LabelingResult, AppliedPerturbation, PerturbationHeuristic
 
 class BasePerturbationChain(PerturbationChain):
     def __init__(self, perturbations: list[AppliedPerturbation]) -> None:
@@ -21,7 +19,7 @@ class BasePerturbationChain(PerturbationChain):
         perturbation: Perturbation,
         heuristic: PerturbationHeuristic[Any],
         labeling_functions: list[LabelingFunction],
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         desired_result: bool = False
     ) -> AppliedPerturbation | None:
         out = None
@@ -45,6 +43,8 @@ class BasePerturbationChain(PerturbationChain):
             # Check for label changes
             candidate_result = compute_labels(out.graph, labeling_functions)
             changed_nodes, changed_edges, changed_graphs = self.get_changes(original_result, candidate_result)
+            
+            out.set_labeling_changes(changed_nodes, changed_edges, changed_graphs)
 
             if changed_nodes or changed_edges or changed_graphs:
                 result = desired_result
@@ -58,7 +58,7 @@ class BasePerturbationChain(PerturbationChain):
     def test_perturbation(
         self,
         index: int,
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         labeling_functions: list[LabelingFunction],
         desired_result: bool = False
     ) -> AppliedPerturbation | None:
@@ -78,6 +78,8 @@ class BasePerturbationChain(PerturbationChain):
         candidate_result = compute_labels(out.graph, labeling_functions)
         changed_nodes, changed_edges, changed_graphs = self.get_changes(original_result, candidate_result)
 
+        out.set_labeling_changes(changed_nodes, changed_edges, changed_graphs)
+
         if changed_nodes or changed_edges or changed_graphs:
             result = desired_result
         else:
@@ -89,7 +91,7 @@ class BasePerturbationChain(PerturbationChain):
 
     def _test_subchain(
         self,
-        original_graph: nx.Graph[Any],
+        original_graph: GraphLike,
         labeling_functions: list[LabelingFunction],
         subchain: BasePerturbationChain,
         subchain_length: int
@@ -120,7 +122,7 @@ class BasePerturbationChain(PerturbationChain):
                     break;
         return out
 
-    def check_subchain_validity(self, original_graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
+    def check_subchain_validity(self, original_graph: GraphLike, labeling_functions: list[LabelingFunction]) -> bool:
         if len(self) > 2:
             for subchain_length in range(2, len(self)):
                 for perturbation in self:
@@ -133,7 +135,7 @@ class BasePerturbationChain(PerturbationChain):
                         return False
         return len(self) > 1
 
-    def _check_chain_validity(self, graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
+    def _check_chain_validity(self, graph: GraphLike, labeling_functions: list[LabelingFunction]) -> bool:
         result = None
         acc_graph = graph
 
@@ -147,8 +149,11 @@ class BasePerturbationChain(PerturbationChain):
 
         return (result is not None)
 
-    def is_valid(self, graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
+    def is_valid(self, graph: GraphLike, labeling_functions: list[LabelingFunction]) -> bool:
         return self._check_chain_validity(graph, labeling_functions) and self.check_subchain_validity(graph, labeling_functions)
+
+    def chain_type(self) -> str:
+        return 'base'
 
 class NewChangedElementsPerturbationChain(PerturbationChain):
     def __init__(self, perturbations: list[AppliedPerturbation]) -> None:
@@ -165,7 +170,7 @@ class NewChangedElementsPerturbationChain(PerturbationChain):
         perturbation: Perturbation,
         heuristic: PerturbationHeuristic[Any],
         labeling_functions: list[LabelingFunction],
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         desired_result: bool = False
     ) -> AppliedPerturbation | None:
         new_heuristic = heuristic.next(graph, self)
@@ -173,30 +178,44 @@ class NewChangedElementsPerturbationChain(PerturbationChain):
         if new_heuristic is None:
             return None
         
-        return perturbation.apply_heuristic(
+        out = perturbation.apply_heuristic(
             graph, new_heuristic
         )
+        original_result = compute_labels(graph, labeling_functions)
+        candidate_result = compute_labels(out.graph, labeling_functions)
+
+        changed_nodes, changed_edges, changed_graphs = self.get_changes(original_result, candidate_result)
+        out.set_labeling_changes(changed_nodes, changed_edges, changed_graphs)
+        
+        return out
 
     def test_perturbation(
         self,
         index: int,
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         labeling_functions: list[LabelingFunction],
         desired_result: bool = False
     ) -> AppliedPerturbation | None:
         if index >= len(self):
             raise ValueError('Perturbation index out of bounds.')
 
-        return self.perturbations[index].perturbation.apply_heuristic(
+        out = self.perturbations[index].perturbation.apply_heuristic(
             graph, self.perturbations[index].heuristic
         )
+        original_result = compute_labels(graph, labeling_functions)
+        candidate_result = compute_labels(out.graph, labeling_functions)
 
-    def check_subchain_validity(self, original_graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
+        changed_nodes, changed_edges, changed_graphs = self.get_changes(original_result, candidate_result)
+        out.set_labeling_changes(changed_nodes, changed_edges, changed_graphs)
+
+        return out
+
+    def check_subchain_validity(self, original_graph: GraphLike, labeling_functions: list[LabelingFunction]) -> bool:
         return True
 
     def _get_individual_changes(
         self,
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         labeling_functions: list[LabelingFunction],
         original_result: LabelingResult
     ) -> tuple[dict[Any, tuple[Any, Any]], dict[tuple[Any, Any], tuple[Any, Any]], dict[Any, tuple[Any, Any]]]:
@@ -214,7 +233,7 @@ class NewChangedElementsPerturbationChain(PerturbationChain):
             graph_changes.update(changed_graphs)
         return (node_changes, edge_changes, graph_changes)
 
-    def is_valid(self, graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
+    def is_valid(self, graph: GraphLike, labeling_functions: list[LabelingFunction]) -> bool:
         if len(self) <= 0:
             return False
 
@@ -229,3 +248,11 @@ class NewChangedElementsPerturbationChain(PerturbationChain):
         new_changed_graphs = set(all_graph_changes.keys()) - set(individual_graph_changes.keys())
 
         return (len(new_changed_nodes) > 0 or len(new_changed_edges) > 0 or len(new_changed_graphs) > 0)
+
+    def chain_type(self) -> str:
+        return 'new_changed_elements'
+
+chain_types: dict[str, type[PerturbationChain]] = {
+    'base': BasePerturbationChain,
+    'new_changed_elements': NewChangedElementsPerturbationChain
+}

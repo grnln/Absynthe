@@ -37,6 +37,7 @@ from graph.perturbations import (  # noqa: E402
     RemoveEdgesPerturbation,
     EdgePerturbation,
 )
+from interfaces import Perturbation
 from utils.distributions import IntDistribution  # noqa: E402
 
 
@@ -54,7 +55,7 @@ CLEAN_OUTPUT = True
 # re-sampled for every graph.
 count_dist = IntDistribution("normal", {"mean": 3, "std": 1})
 
-DATASET_CONFIGS = [
+DATASET_CONFIGS: list[dict[str, Any]] = [
     # Single-motif datasets
     {
         "name": "house",
@@ -95,16 +96,16 @@ DATASET_CONFIGS = [
 # `run_pipeline`.
 # ---------------------------------------------------------------------------
 
-def _datasets_from_python_configs() -> List[Dict[str, Any]]:
+def _datasets_from_python_configs() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     datasets: List[Dict[str, Any]] = []
     for config in DATASET_CONFIGS:
         name = config["name"]
         graph_gen = MotifComposite(motifs=config["motifs"])
         labeling = [MotifLabelingFunction(motif_order=config["motif_order"])]
         perturbations = [
-            (RemoveNodesPerturbation(num_nodes=1, strategy="motif", folder_name="remove_nodes"), 1),
-            (EdgePerturbation(p_remove=0.1, p_add=0.05, folder_name="edge_perturbation"), 1),
-            (RemoveEdgesPerturbation(p_remove=0.15, folder_name="remove_edges"), 1),
+            (RemoveNodesPerturbation(num_nodes=1, strategy="motif", folder_name="remove_nodes"), 1, {}),
+            (EdgePerturbation(p_remove=0.1, p_add=0.05, folder_name="edge_perturbation"), 1, {}),
+            (RemoveEdgesPerturbation(p_remove=0.15, folder_name="remove_edges"), 1, {}),
         ]
         datasets.append({
             "name": name,
@@ -120,7 +121,7 @@ def _datasets_from_python_configs() -> List[Dict[str, Any]]:
                 "composition": "sequential",
             },
         })
-    return datasets
+    return [], datasets
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +129,7 @@ def _datasets_from_python_configs() -> List[Dict[str, Any]]:
 # same runtime form via the shared web/backend builders.
 # ---------------------------------------------------------------------------
 
-def _datasets_from_json(path: str | Path) -> tuple[List[Dict[str, Any]], int | None, bool]:
+def _datasets_from_json(path: str | Path) -> tuple[list[dict[str, Any]], List[Dict[str, Any]], int | None, bool]:
     from utils.dataset_config import load_dataset_config
     from web.backend.services.registry import (
         build_graph_generator,
@@ -159,7 +160,7 @@ def _datasets_from_json(path: str | Path) -> tuple[List[Dict[str, Any]], int | N
             # IntDistribution objects and are re-sampled for every graph.
             "gen_kwargs": {"num_graphs": request.num_graphs, **build_graph_kwargs(request)},
         })
-    return datasets, suite.seed, suite.clean_output
+    return suite.chain_configs, datasets, suite.seed, suite.clean_output
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +168,7 @@ def _datasets_from_json(path: str | Path) -> tuple[List[Dict[str, Any]], int | N
 # ---------------------------------------------------------------------------
 
 def run_pipeline(
+    chain_configs: list[dict[str, Any]],
     datasets: List[Dict[str, Any]],
     *,
     seed: int | None,
@@ -215,6 +217,7 @@ def run_pipeline(
             seed=dataset_seed if dataset_seed is not None else seed,
             config=entry.get("config"),
             provenance=provenance,
+            chain_configs=chain_configs
         )
 
         metadata = generator.generate_dataset(**entry["gen_kwargs"])
@@ -260,21 +263,23 @@ def main(argv: List[str] | None = None) -> None:
         config_path = DEFAULT_JSON_PATH
 
     if config_path is None:
-        datasets = _datasets_from_python_configs()
+        chain_configs, datasets = _datasets_from_python_configs()
         run_pipeline(
+            chain_configs,
             datasets,
             seed=SEED,
             clean_output=CLEAN_OUTPUT,
             datasets_root=DATASETS_ROOT,
         )
     else:
-        datasets, seed, clean_output = _datasets_from_json(config_path)
+        chain_configs, datasets, seed, clean_output = _datasets_from_json(config_path)
         # The JSON's per-dataset output_dirs are absolute or relative paths set
         # by the loader; pick the common parent as the cleanup root if every
         # dataset shares one, otherwise fall back to "datasets".
         roots = {Path(d["output_dir"]).parent.as_posix() for d in datasets}
         datasets_root = roots.pop() if len(roots) == 1 else "datasets"
         run_pipeline(
+            chain_configs,
             datasets,
             seed=seed,
             clean_output=clean_output,

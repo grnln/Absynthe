@@ -1,12 +1,10 @@
 import math
 import random
 import graphviz
-import networkx as nx
 
 from copy import deepcopy
 from typing import Any
-from interfaces import LabelingFunction
-from interfaces import Perturbation, PerturbationHeuristic, PerturbationChain
+from interfaces import GraphLike, LabelingFunction, Perturbation, PerturbationHeuristic, PerturbationChain
 
 class MCTSTree:
     def __init__(
@@ -15,7 +13,7 @@ class MCTSTree:
         chain: PerturbationChain,
         chain_type: type[PerturbationChain],
         expansion_heuristics: dict[Perturbation, PerturbationHeuristic[Any]],
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         exploration_param: float = math.sqrt(2.0)
     ) -> None:
         self.level = 0
@@ -72,7 +70,7 @@ class MCTSTree:
 
     def simulate(
         self,
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         labeling_functions: list[LabelingFunction],
         chain_length: int,
         chains: set[PerturbationChain],
@@ -141,7 +139,7 @@ class MCTSTree:
     def is_leaf(self) -> bool:
         return (self.is_expanded() and len(self.children) <= 0)
 
-    def visualize(self, dot: Any) -> None:
+    def visualize(self, dot: graphviz.Graph) -> None:
         dot.node(f'{self.chain}')
 
         if self.parent is not None:

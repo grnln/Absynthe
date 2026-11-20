@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import abc
-import networkx as nx
 
 from typing import Any
 from abc import abstractmethod
+from graph.labeling_helpers import compute_labels
+
+from .graph_types import GraphLike
 from .perturbation import Perturbation
 from .labeling_result import LabelingResult
 from .labeling_function import LabelingFunction
@@ -82,13 +84,28 @@ class PerturbationChain(abc.ABC):
         }
         return (changed_nodes, changed_edges, changed_graphs)
 
+    def get_final_changes(
+        self,
+        graph: GraphLike,
+        labeling_functions: list[LabelingFunction]
+    ) -> tuple[dict[Any, tuple[Any, Any]], dict[tuple[Any, Any], tuple[Any, Any]], dict[Any, tuple[Any, Any]]]:
+        if len(self) < 1:
+            return ({}, {}, {})
+        
+        last = self[-1].graph
+
+        original_result = compute_labels(graph, labeling_functions)
+        candidate_result = compute_labels(last, labeling_functions)
+        
+        return self.get_changes(original_result, candidate_result)
+
     @abstractmethod
     def test_potential_perturbation(
         self,
         perturbation: Perturbation,
         heuristic: PerturbationHeuristic[Any],
         labeling_functions: list[LabelingFunction],
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         desired_result: bool = False
     ) -> AppliedPerturbation | None:
         pass
@@ -97,16 +114,20 @@ class PerturbationChain(abc.ABC):
     def test_perturbation(
         self,
         index: int,
-        graph: nx.Graph[Any],
+        graph: GraphLike,
         labeling_functions: list[LabelingFunction],
         desired_result: bool = False
     ) -> AppliedPerturbation | None:
         pass
 
     @abstractmethod
-    def check_subchain_validity(self, original_graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
+    def check_subchain_validity(self, original_graph: GraphLike, labeling_functions: list[LabelingFunction]) -> bool:
         pass
 
     @abstractmethod
-    def is_valid(self, graph: nx.Graph[Any], labeling_functions: list[LabelingFunction]) -> bool:
+    def is_valid(self, graph: GraphLike, labeling_functions: list[LabelingFunction]) -> bool:
+        pass
+
+    @abstractmethod
+    def chain_type(self) -> str:
         pass

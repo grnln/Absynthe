@@ -1,5 +1,4 @@
 import abc
-import networkx as nx
 
 from typing import Tuple, Dict, Any, Optional
 
@@ -46,5 +45,5 @@ class Perturbation(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def apply_heuristic(self, graph: nx.Graph[Any], heuristic: PerturbationHeuristic[Any]) -> Any:
+    def apply_heuristic(self, graph: GraphLike, heuristic: PerturbationHeuristic[Any]) -> Any:
         pass
