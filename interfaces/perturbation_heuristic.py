@@ -18,6 +18,10 @@ class PerturbationHeuristic[T](abc.ABC):
         pass
 
     @abstractmethod
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        pass
+
+    @abstractmethod
     def reset(self) -> None:
         pass
 

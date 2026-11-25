@@ -73,8 +73,7 @@ class MCTSTree:
         graph: GraphLike,
         labeling_functions: list[LabelingFunction],
         chain_length: int,
-        chains: set[PerturbationChain],
-        ordered: bool
+        chains: set[PerturbationChain]
     ) -> bool:
         step = 0
         chain = deepcopy(self.chain)
@@ -102,7 +101,7 @@ class MCTSTree:
         self.simulation_heuristics = {p: deepcopy(self.expansion_heuristics[p]) for p in self.expansion_heuristics}
 
         if chain.is_valid(graph, labeling_functions):
-            if ordered or (not ordered and not any([chain.match_perturbation_set(c) for c in chains])):
+            if all([not chain.match_perturbation_set(c) for c in chains]):
                 chains.add(chain)
             return True
 

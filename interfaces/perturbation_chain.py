@@ -37,14 +37,7 @@ class PerturbationChain(abc.ABC):
         if len(other) != len(self):
             return False
 
-        num_equal_elements = 0
-
-        for perturbation in self:
-            for other_perturbation in other:
-                if perturbation == other_perturbation:
-                    num_equal_elements += 1
-
-        return num_equal_elements == len(self)
+        return set(self.perturbations) == set(other.perturbations)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, PerturbationChain):

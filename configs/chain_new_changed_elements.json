@@ -1,0 +1,177 @@
+{
+  "seed": 42,
+  "clean_output": true,
+  "datasets_root": "datasets",
+  "shared": {
+    "num_graphs": 10,
+    "max_perturbation_iterations": 15,
+    "composition": "sequential",
+    "composition_params": {},
+    "num_extra_vertices": 2,
+    "num_extra_vertices_distribution": { "type": "normal", "params": { "mean": 10, "std": 3 }, "min": 0 },
+    "num_extra_edges": 0,
+    "max_workers": 4,
+    "max_tasks_per_worker": 10,
+    "chain_configs": [
+      {
+        "name": "heuristic_natural_order",
+        "algorithm": "heuristic",
+        "chain_type": "new_changed_elements",
+        "kwargs": {
+            "max_length": 4,
+            "max_iterations": 1000,
+            "num_chains": 4
+        }
+      }, {
+        "name": "heuristic_proximity",
+        "algorithm": "heuristic",
+        "chain_type": "new_changed_elements",
+        "kwargs": {
+            "max_length": 4,
+            "max_iterations": 1000,
+            "num_chains": 4
+        }
+      }, {
+        "name": "heuristic_centrality",
+        "algorithm": "heuristic",
+        "chain_type": "new_changed_elements",
+        "kwargs": {
+            "max_length": 4,
+            "max_iterations": 1000,
+            "num_chains": 4
+        }
+      }, {
+        "name": "heuristic_connected_components",
+        "algorithm": "heuristic",
+        "chain_type": "new_changed_elements",
+        "kwargs": {
+            "max_length": 4,
+            "max_iterations": 1000,
+            "num_chains": 4
+        }
+      }, {
+        "name": "mcts_random",
+        "algorithm": "mcts",
+        "chain_type": "new_changed_elements",
+        "kwargs": {
+            "max_length": 4,
+            "max_iterations": 1000,
+            "max_training_iterations": 100,
+            "mcts_exploration_param": 1.41,
+            "num_chains": 4,
+            "visualize_tree": false
+        }
+      }
+    ],
+    "perturbations": [
+      {
+        "type": "remove_nodes",
+        "count": 1,
+        "heuristics": {
+          "heuristic_natural_order": {
+            "name": "natural_order_node"
+          },
+          "heuristic_proximity": {
+            "name": "proximity_node"
+          },
+          "heuristic_centrality": {
+            "name": "centrality_node"
+          },
+          "heuristic_connected_components": {
+            "name": "connected_components_node"
+          },
+          "mcts_random": {
+            "name": "random_node"
+          }
+        },
+        "folder_name": "remove_nodes",
+        "params": { "num_nodes": 1, "strategy": "motif" }
+      },
+      {
+        "type": "remove_edges",
+        "count": 1,
+        "heuristics": {
+          "heuristic_natural_order": {
+            "name": "natural_order_edge"
+          },
+          "heuristic_proximity": {
+            "name": "proximity_edge"
+          },
+          "heuristic_centrality": {
+            "name": "centrality_edge"
+          },
+          "heuristic_connected_components": {
+            "name": "connected_components_edge"
+          },
+          "mcts_random": {
+            "name": "random_edge"
+          }
+        },
+        "folder_name": "remove_edges",
+        "params": { "num_edges": 1, "p_remove": 0.15 }
+      }
+    ]
+  },
+  "datasets": [
+    {
+      "name": "house",
+      "motifs": [
+        {
+          "type": "house",
+          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 }, "min": 1 }
+        }
+      ],
+      "labeling_functions": [
+        { "type": "motif_labeling", "params": { "motif_order": ["house"] } }
+      ]
+    },
+    {
+      "name": "cycle_5",
+      "motifs": [
+        {
+          "type": "cycle",
+          "params": [5],
+          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 }, "min": 1 }
+        }
+      ],
+      "labeling_functions": [
+        { "type": "motif_labeling", "params": { "motif_order": ["cycle_5"] } }
+      ]
+    },
+    {
+      "name": "star_5",
+      "motifs": [
+        {
+          "type": "star",
+          "params": [5],
+          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 }, "min": 1 }
+        }
+      ],
+      "labeling_functions": [
+        { "type": "motif_labeling", "params": { "motif_order": ["star_5"] } }
+      ]
+    },
+    {
+      "name": "house_cycle5_star5",
+      "motifs": [
+        {
+          "type": "house",
+          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 }, "min": 1 }
+        },
+        {
+          "type": "cycle",
+          "params": [5],
+          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 }, "min": 1 }
+        },
+        {
+          "type": "star",
+          "params": [5],
+          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 }, "min": 1 }
+        }
+      ],
+      "labeling_functions": [
+        { "type": "motif_labeling", "params": { "motif_order": ["house", "cycle_5", "star_5"] } }
+      ]
+    }
+  ]
+}

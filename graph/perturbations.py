@@ -217,6 +217,7 @@ class RemoveNodesPerturbation(Perturbation):
             self,
             heuristic,
             working_graph,
+            graph.copy(),
             {"removed_nodes": self._get_removed_info(graph, nodes)}
         )
 
@@ -278,6 +279,7 @@ class RemoveEdgesPerturbation(Perturbation):
             self,
             heuristic,
             working_graph,
+            graph.copy(),
             {"removed_edges": self._get_removed_info(graph, edges)}
         )
 
@@ -334,6 +336,7 @@ class AddEdgesPerturbation(Perturbation):
             self,
             heuristic,
             working_graph,
+            graph.copy(),
             {"added_edges": self._get_added_info(graph, working_graph)}
         )
 

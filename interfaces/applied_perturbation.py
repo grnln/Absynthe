@@ -9,11 +9,13 @@ class AppliedPerturbation:
         perturbation: Perturbation,
         heuristic: PerturbationHeuristic[Any],
         graph: GraphLike,
+        original_graph: GraphLike,
         changes: dict[str, Any]
     ) -> None:
         self.perturbation = perturbation
         self.heuristic = heuristic
         self.graph = graph
+        self.original_graph = original_graph
         self.changes = changes
 
         self.changed_nodes = {}

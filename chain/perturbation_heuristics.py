@@ -29,6 +29,9 @@ class NaturalOrderNodePerturbationHeuristic(PerturbationHeuristic[Any]):
     def current(self) -> Any:
         return self.traversed_nodes[-1]
 
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        return graph.has_node(self.current())
+
     def reset(self) -> None:
         self.traversed_nodes.clear()
 
@@ -60,6 +63,10 @@ class NaturalOrderEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
 
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        u, v = self.current()
+        return graph.has_edge(u, v)
+
     def reset(self) -> None:
         self.traversed_edges.clear()
 
@@ -78,6 +85,9 @@ node_perturbation_types: set[str] = {
 }
 
 def node_graph_distance(a: Any, b: Any, graph: GraphLike) -> float:
+    if a not in graph.nodes or b not in graph.nodes:
+        return inf
+
     return nx.shortest_path_length(graph, source = a, target = b) if nx.has_path(graph, a, b) else inf # type: ignore
 
 def node_euclidean_distance(a: Any, b: Any, graph: GraphLike) -> float:
@@ -132,6 +142,9 @@ class ProximityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
 
     def current(self) -> tuple[Any, Any]:
         return self.traversed_nodes[-1]
+
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        return graph.has_node(self.current())
 
     def reset(self) -> None:
         self.traversed_nodes.clear()
@@ -212,9 +225,12 @@ class ProximityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]])
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
 
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        u, v = self.current()
+        return graph.has_edge(u, v)
+
     def reset(self) -> None:
         self.traversed_edges.clear()
-
 
     def soft_reset(self) -> None:
         if len(self.traversed_edges) > 1:
@@ -251,6 +267,9 @@ class CentralityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
 
     def current(self) -> Any:
         return self.traversed_nodes[-1]
+
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        return graph.has_node(self.current())
 
     def reset(self) -> None:
         self.traversed_nodes.clear()
@@ -291,6 +310,10 @@ class CentralityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
 
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        u, v = self.current()
+        return graph.has_edge(u, v)
+
     def reset(self) -> None:
         self.traversed_edges.clear()
 
@@ -320,7 +343,7 @@ class ConnectedComponentsNodePerturbationHeuristic(PerturbationHeuristic[Any]):
                 if perturbation_type in perturbation.changes:
                     node_dict = perturbation.changes[perturbation_type]
                     last_perturbed_node = node_dict[-1]['id']
-                    last_perturbed_graph = perturbation.graph
+                    last_perturbed_graph = perturbation.original_graph
                     break
 
         if last_perturbed_node is None:
@@ -342,6 +365,9 @@ class ConnectedComponentsNodePerturbationHeuristic(PerturbationHeuristic[Any]):
 
     def current(self) -> Any:
         return self.traversed_nodes[-1]
+
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        return graph.has_node(self.current())
 
     def reset(self) -> None:
         self.traversed_nodes.clear()
@@ -394,7 +420,7 @@ class ConnectedComponentsEdgePerturbationHeuristic(PerturbationHeuristic[tuple[A
                 if perturbation_type in perturbation.changes:
                     edge_dict = perturbation.changes[perturbation_type]
                     last_perturbed_edge = (edge_dict[-1]['u'], edge_dict[-1]['v'])
-                    last_perturbed_graph = perturbation.graph
+                    last_perturbed_graph = perturbation.original_graph
                     break
 
         if last_perturbed_edge is None:
@@ -430,7 +456,11 @@ class ConnectedComponentsEdgePerturbationHeuristic(PerturbationHeuristic[tuple[A
 
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
-    
+
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        u, v = self.current()
+        return graph.has_edge(u, v)
+
     def reset(self) -> None:
         self.traversed_edges.clear()
 
@@ -461,6 +491,9 @@ class RandomNodePerturbationHeuristic(PerturbationHeuristic[Any]):
  
     def current(self) -> Any:
         return self.traversed_nodes[-1]
+
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        return graph.has_node(self.current())
 
     def reset(self) -> None:
         self.traversed_nodes.clear()
@@ -493,6 +526,10 @@ class RandomEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
 
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        u, v = self.current()
+        return graph.has_edge(u, v)
+
     def reset(self) -> None:
         self.traversed_edges.clear()
 
@@ -517,7 +554,6 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
         max_training_iterations: int = 100,
         mcts_exploration_param: float = sqrt(2.0),
         visualize_tree: bool = False,
-        ordered: bool = False,
         **kwargs: Any
     ) -> None:
         super().__init__(graph, **kwargs)
@@ -537,14 +573,14 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
             graph,
             mcts_exploration_param
         )
-        self.ordered = ordered
         self.chains = self._train_tree(self.tree)
         self.traversed_nodes: dict[int, list[MCTSTree]] = {}
 
-        print(f'Found {len(self.chains)} chains during training{":" if len(self.chains) > 0 else "."}')
+        if 'print_chains' in kwargs and kwargs['print_chains'] == True:
+            print(f'Found {len(self.chains)} chains during training{":" if len(self.chains) > 0 else "."}')
 
-        if len(self.chains) > 0:
-            print(self.chains)
+            if len(self.chains) > 0:
+                print(self.chains)
 
         if visualize_tree:
             self._visualize_tree(self.tree)
@@ -571,8 +607,7 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
                 self.graph,
                 self.labeling_functions,
                 random.randint(2, self.max_length),
-                chains,
-                self.ordered
+                chains
             )
             node.backpropagate(valid_chain)
         return chains
@@ -594,6 +629,9 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
         tree.visualize(dot)
         dot.render(directory = 'visualizations')
 
+    def _check_valid_perturbation(self, graph: GraphLike, perturbation: AppliedPerturbation) -> bool:
+        return perturbation.heuristic.current_in_graph(graph)
+
     def next(self, graph: GraphLike, chain: PerturbationChain) -> MCTSPerturbationHeuristic | None:
         node = self.tree
 
@@ -602,10 +640,15 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
                 if perturbation == child.chain[-1]:
                     node = child
 
-        candidate_nodes = node.children
+        candidate_nodes = [
+            child for child in node.children
+            if self._check_valid_perturbation(graph, child.chain[-1])
+        ]
 
         if len(chain) in self.traversed_nodes:
-            candidate_nodes = [child for child in candidate_nodes if child not in self.traversed_nodes[len(chain)]]
+            candidate_nodes = [
+                child for child in candidate_nodes if child not in self.traversed_nodes[len(chain)]
+            ]
 
         if len(candidate_nodes) < 1:
             return None
@@ -622,6 +665,9 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
 
     def current(self) -> AppliedPerturbation:
         return self.traversed_nodes[max(self.traversed_nodes.keys())][-1].chain[-1]
+
+    def current_in_graph(self, graph: GraphLike) -> bool:
+        return self._check_valid_perturbation(graph, self.current())
 
     def reset(self) -> None:
         self.traversed_nodes = {}

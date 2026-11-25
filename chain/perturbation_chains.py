@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import networkx as nx
+
 from typing import Any
 from graph.labeling_helpers import compute_labels
 from interfaces import GraphLike, PerturbationChain, Perturbation, LabelingFunction, LabelingResult, AppliedPerturbation, PerturbationHeuristic
@@ -91,6 +93,7 @@ class BasePerturbationChain(PerturbationChain):
 
     def _test_subchain(
         self,
+        start: int,
         original_graph: GraphLike,
         labeling_functions: list[LabelingFunction],
         subchain: BasePerturbationChain,
@@ -103,36 +106,43 @@ class BasePerturbationChain(PerturbationChain):
             acc_graph = original_graph
 
             for perturbation in subchain:
-                result = self.test_perturbation(self.perturbations.index(perturbation), acc_graph, labeling_functions)
+                try:
+                    result = self.test_perturbation(self.perturbations.index(perturbation), acc_graph, labeling_functions)
+                except nx.NetworkXError:
+                    result = None
+                    break
 
                 if result is not None:
                     acc_graph = result.graph
+                else:
+                    break
     
             out = result is not None
         else:
-            for perturbation in [p for p in self if p not in subchain]:
+            for i in range(start, len(self.perturbations)):
                 out = self._test_subchain(
+                    i + 1,
                     original_graph,
                     labeling_functions,
-                    subchain + BasePerturbationChain([perturbation]),
+                    subchain + BasePerturbationChain([self.perturbations[i]]),
                     subchain_length
                 )
-                
-                if out is False:
-                    break;
+
+                if out == False:
+                    break
         return out
 
     def check_subchain_validity(self, original_graph: GraphLike, labeling_functions: list[LabelingFunction]) -> bool:
         if len(self) > 2:
             for subchain_length in range(2, len(self)):
-                for perturbation in self:
-                    if not self._test_subchain(
-                        original_graph,
-                        labeling_functions,
-                        BasePerturbationChain([perturbation]),
-                        subchain_length
-                    ):
-                        return False
+                if not self._test_subchain(
+                    0,
+                    original_graph,
+                    labeling_functions,
+                    BasePerturbationChain([]),
+                    subchain_length
+                ):
+                    return False
         return len(self) > 1
 
     def _check_chain_validity(self, graph: GraphLike, labeling_functions: list[LabelingFunction]) -> bool:

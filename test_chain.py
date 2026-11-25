@@ -7,7 +7,7 @@ from graph.perturbations import RemoveEdgesPerturbation, RemoveNodesPerturbation
 from chain.perturbation_chains import BasePerturbationChain
 from chain.perturbation_chain_pipelines import  HeuristicPerturbationChainPipeline, MCTSPerturbationChainPipeline
 from interfaces import GraphLike, LabelingFunction, LabelingResult, PerturbationHeuristic, Perturbation
-from chain.perturbation_heuristics import NaturalOrderEdgePerturbationHeuristic, RandomEdgePerturbationHeuristic, ConnectedComponentsNodePerturbationHeuristic
+from chain.perturbation_heuristics import NaturalOrderNodePerturbationHeuristic, RandomEdgePerturbationHeuristic
 
 class TestLabelingFunction(LabelingFunction):
     def __init__(self):
@@ -42,36 +42,41 @@ def test_square() -> None:
     graph = gen.generate_graph()
     labeling = TestLabelingFunction()
 
-    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveNodesPerturbation(num_nodes = 1), ConnectedComponentsNodePerturbationHeuristic(graph))]
+    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveNodesPerturbation(num_nodes = 1), NaturalOrderNodePerturbationHeuristic(graph))]
     pipeline = HeuristicPerturbationChainPipeline(
         graph,
         perturbations,
         [labeling],
-        BasePerturbationChain
+        BasePerturbationChain,
+        max_iterations = 100
     )
     results = pipeline.find()
 
     print('------------------------')
     print('4-node square graph test')
     print('------------------------')
+    print(f'#Iterations = {pipeline.num_iterations} | Running time = {pipeline.running_time}')
     print(f'Found {len(results)} chains:\n{results}\n')
 
 def test_k5() -> None:
     graph = nx.complete_graph(5)
     labeling = TestLabelingFunction()
 
-    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveEdgesPerturbation(0.5), NaturalOrderEdgePerturbationHeuristic(graph))]
-    pipeline = HeuristicPerturbationChainPipeline(
+    perturbations: list[tuple[Perturbation, PerturbationHeuristic[Any]]] = [(RemoveEdgesPerturbation(0.5), RandomEdgePerturbationHeuristic(graph))]
+    pipeline = MCTSPerturbationChainPipeline(
         graph,
         perturbations,
         [labeling],
-        BasePerturbationChain
+        BasePerturbationChain,
+        max_iterations = 10,
+        num_chains = 4
     )
     results = pipeline.find()
 
     print('--------------')
     print('K-5 graph test')
     print('--------------')
+    print(f'#Iterations = {pipeline.num_iterations} | Running time = {pipeline.running_time}')
     print(f'Found {len(results)} chains:\n{results}\n')
 
 if __name__ == '__main__':

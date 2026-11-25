@@ -1,6 +1,7 @@
 import os
 import warnings
-from concurrent.futures import ProcessPoolExecutor
+
+from multiprocessing import Pool
 from typing import Callable, List, Tuple, Dict, Any, Optional, Sequence
 
 from interfaces import GraphGenerator, GraphExporter, LabelingFunction, Perturbation, PerturbationChain, PerturbationHeuristic, GraphLike
@@ -75,7 +76,9 @@ class GraphDatasetGenerator:
         seed: Optional[int] = None,
         config: Optional[Dict[str, Any]] = None,
         provenance: Optional[Dict[str, Any]] = None,
-        chain_configs: list[dict[str, Any]] | None = None
+        chain_configs: list[dict[str, Any]] | None = None,
+        max_workers: int | None = None,
+        max_tasks_per_worker: int | None = None
     ):
         """
         Args:
@@ -125,6 +128,8 @@ class GraphDatasetGenerator:
         self.provenance = provenance
         self.last_config: Optional[Dict[str, Any]] = None
         self.chain_configs = chain_configs
+        self.max_workers = max_workers
+        self.max_tasks_per_worker = max_tasks_per_worker
 
         os.makedirs(self.output_dir, exist_ok=True)
         self.originals_dir = os.path.join(self.output_dir, "originals")
@@ -272,6 +277,7 @@ class GraphDatasetGenerator:
         entry: Dict[str, Any] = {
             "graph_id": graph_counter,
             "base_graph_id": base_graph_id,
+            "chain_type": chain.chain_type(),
             **self._path_entries(variant_files, original_files),
             "perturbations": []
         }
@@ -329,7 +335,7 @@ class GraphDatasetGenerator:
                 f"Graph source exhausted after {e.loaded} graphs "
                 f"(requested {e.requested}). Stopping generation early."
             )
-            return
+            return ([], [])
 
         graph_counter = 0
         labeling_result = None
@@ -421,12 +427,13 @@ class GraphDatasetGenerator:
                             'base_graph_id': index,
                             'algorithm': config['algorithm'],
                             'kwargs': config['kwargs'],
-                            'iterations': pipeline.num_iterations,
-                            'running_time': pipeline.running_time,
                             'found_chains': [
                                 {
                                     'length': t[0],
-                                    'amount': t[1]
+                                    'amount': t[1],
+                                    'iterations': pipeline.num_iterations[t[0]],
+                                    'running_time': pipeline.running_time[t[0]],
+                                    'training_time': pipeline.training_time
                                 } for t in found_chains
                             ]
                         }
@@ -507,7 +514,7 @@ class GraphDatasetGenerator:
             ) for i in range(num_graphs)
         ]
 
-        with ProcessPoolExecutor(max_workers = 4) as pool:
+        with Pool(processes = self.max_workers, maxtasksperchild = self.max_tasks_per_worker) as pool:
             results = pool.map(self._generate_graph_dataset_wrapper, args)
 
             for entry, chain_entry in results:

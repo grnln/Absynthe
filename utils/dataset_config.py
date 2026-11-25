@@ -28,7 +28,8 @@ class DatasetSuiteConfig:
     datasets: List[DatasetGenerateRequest] = field(default_factory=list)
     names: List[str] = field(default_factory=list)
     chain_configs: list[dict[str, Any]] = field(default_factory = list)
-
+    max_workers: int | None = None
+    max_tasks_per_worker: int | None = None
 
 def _merge(shared: Dict[str, Any], entry: Dict[str, Any]) -> Dict[str, Any]:
     """Shallow merge: any key present in `entry` replaces the shared value
@@ -50,10 +51,18 @@ def load_dataset_config(path: str | Path) -> DatasetSuiteConfig:
     if not isinstance(shared, dict):
         raise ValueError("'shared' must be an object if present")
 
-    chain_configs = []
+    chain_configs: list[dict[str, Any]] = []
+    max_workers: int | None = None
+    max_tasks_per_worker: int | None = None
 
     if 'chain_configs' in shared:
         chain_configs = shared['chain_configs']
+
+    if 'max_workers' in shared:
+        max_workers = shared['max_workers']
+
+    if 'max_tasks_per_worker' in shared:
+        max_tasks_per_worker = shared['max_tasks_per_worker']
 
     datasets_root = raw.get("datasets_root", "datasets")
     requests: List[DatasetGenerateRequest] = []
@@ -85,5 +94,7 @@ def load_dataset_config(path: str | Path) -> DatasetSuiteConfig:
         datasets_root=datasets_root,
         datasets=requests,
         names=names,
-        chain_configs = chain_configs
+        chain_configs = chain_configs,
+        max_workers = max_workers,
+        max_tasks_per_worker = max_tasks_per_worker
     )

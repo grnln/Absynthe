@@ -49,6 +49,8 @@ SEED = 42
 NUM_GRAPHS = 300
 DATASETS_ROOT = "datasets"
 CLEAN_OUTPUT = True
+MAX_WORKERS = 4
+MAX_TASKS_PER_WORKER = 10
 
 # Normal distribution centered at 3 with std=1 -> mostly 2-4 motifs per graph.
 # Each motif entry is (motif, count): count is an int or a distribution
@@ -129,7 +131,7 @@ def _datasets_from_python_configs() -> tuple[list[dict[str, Any]], list[dict[str
 # same runtime form via the shared web/backend builders.
 # ---------------------------------------------------------------------------
 
-def _datasets_from_json(path: str | Path) -> tuple[list[dict[str, Any]], List[Dict[str, Any]], int | None, bool]:
+def _datasets_from_json(path: str | Path) -> tuple[list[dict[str, Any]], int | None, int | None, List[Dict[str, Any]], int | None, bool]:
     from utils.dataset_config import load_dataset_config
     from web.backend.services.registry import (
         build_graph_generator,
@@ -160,7 +162,7 @@ def _datasets_from_json(path: str | Path) -> tuple[list[dict[str, Any]], List[Di
             # IntDistribution objects and are re-sampled for every graph.
             "gen_kwargs": {"num_graphs": request.num_graphs, **build_graph_kwargs(request)},
         })
-    return suite.chain_configs, datasets, suite.seed, suite.clean_output
+    return suite.chain_configs, suite.max_workers, suite.max_tasks_per_worker, datasets, suite.seed, suite.clean_output
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +176,8 @@ def run_pipeline(
     seed: int | None,
     clean_output: bool,
     datasets_root: str,
+    max_workers: int | None,
+    max_tasks_per_worker: int | None
 ) -> None:
     if seed is not None:
         set_seed(seed)
@@ -217,7 +221,9 @@ def run_pipeline(
             seed=dataset_seed if dataset_seed is not None else seed,
             config=entry.get("config"),
             provenance=provenance,
-            chain_configs=chain_configs
+            chain_configs=chain_configs,
+            max_workers = max_workers,
+            max_tasks_per_worker = max_tasks_per_worker
         )
 
         metadata = generator.generate_dataset(**entry["gen_kwargs"])
@@ -270,9 +276,11 @@ def main(argv: List[str] | None = None) -> None:
             seed=SEED,
             clean_output=CLEAN_OUTPUT,
             datasets_root=DATASETS_ROOT,
+            max_workers = MAX_WORKERS,
+            max_tasks_per_worker = MAX_TASKS_PER_WORKER
         )
     else:
-        chain_configs, datasets, seed, clean_output = _datasets_from_json(config_path)
+        chain_configs, max_workers, max_tasks_per_worker, datasets, seed, clean_output = _datasets_from_json(config_path)
         # The JSON's per-dataset output_dirs are absolute or relative paths set
         # by the loader; pick the common parent as the cleanup root if every
         # dataset shares one, otherwise fall back to "datasets".
@@ -284,6 +292,8 @@ def main(argv: List[str] | None = None) -> None:
             seed=seed,
             clean_output=clean_output,
             datasets_root=datasets_root,
+            max_workers = max_workers,
+            max_tasks_per_worker = max_tasks_per_worker
         )
 
 
