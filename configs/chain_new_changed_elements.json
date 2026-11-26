@@ -19,7 +19,7 @@
         "chain_type": "new_changed_elements",
         "kwargs": {
             "max_length": 4,
-            "max_iterations": 1000,
+            "max_iterations": 500,
             "num_chains": 4
         }
       }, {
@@ -28,7 +28,7 @@
         "chain_type": "new_changed_elements",
         "kwargs": {
             "max_length": 4,
-            "max_iterations": 1000,
+            "max_iterations": 500,
             "num_chains": 4
         }
       }, {
@@ -37,7 +37,7 @@
         "chain_type": "new_changed_elements",
         "kwargs": {
             "max_length": 4,
-            "max_iterations": 1000,
+            "max_iterations": 500,
             "num_chains": 4
         }
       }, {
@@ -46,7 +46,7 @@
         "chain_type": "new_changed_elements",
         "kwargs": {
             "max_length": 4,
-            "max_iterations": 1000,
+            "max_iterations": 500,
             "num_chains": 4
         }
       }, {
@@ -55,7 +55,7 @@
         "chain_type": "new_changed_elements",
         "kwargs": {
             "max_length": 4,
-            "max_iterations": 1000,
+            "max_iterations": 500,
             "max_training_iterations": 100,
             "mcts_exploration_param": 1.41,
             "num_chains": 4,

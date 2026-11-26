@@ -2,7 +2,6 @@ import random, time
 
 from math import sqrt
 from typing import Any
-from copy import deepcopy
 from .perturbation_heuristics import MCTSPerturbationHeuristic
 from interfaces import GraphLike, Perturbation, PerturbationHeuristic, PerturbationChainPipeline, PerturbationChain, LabelingFunction
 from .perturbation_chains import chain_types
@@ -27,7 +26,7 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
     ) -> None:
         if (self.num_chains is not None and len(chains) >= self.num_chains) or (self.max_iterations is not None and self.num_iterations[chain_length] >= self.max_iterations):
             return
-        
+
         if len(chain) >= chain_length:
             if not chain.check_subchain_validity(self.graph, self.labeling_functions):
                 return
@@ -35,11 +34,18 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
             if all([not chain.match_perturbation_set(c) for c in chains]):
                 chains.add(chain)
         else:
-            for perturbation in self.perturbations:
-                heuristic: PerturbationHeuristic[Any] | None = self.heuristics[perturbation]
+            for perturbation in self.heuristics:
+                heuristic = self.heuristics[perturbation]
+                counter = 0
 
-                while heuristic is not None and (self.max_iterations is None or self.num_iterations[chain_length] < self.max_iterations):
+                while self.max_iterations is None or self.num_iterations[chain_length] < self.max_iterations:
                     self.num_iterations[chain_length] += 1
+                    has_next = heuristic.next(graph, chain)
+
+                    if not has_next:
+                        break
+
+                    counter += 1
                     result = chain.test_potential_perturbation(
                         perturbation,
                         heuristic,
@@ -49,14 +55,12 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
                     )
 
                     if result is None:
-                        heuristic = heuristic.next(self.graph, chain)
                         continue
 
-                    heuristic = deepcopy(result.heuristic)
                     new_chain = chain + self.chain_type([result])
                     
                     if any([new_chain.match_perturbation_set(detected_chain) for detected_chain in [c for c in chains if len(c) == len(new_chain)]]):
-                        return
+                        continue
 
                     self._find_chain(
                         result.graph,
@@ -64,6 +68,10 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
                         chain_length,
                         chains
                     )
+                
+                while counter > 0:
+                    heuristic.back()
+                    counter -= 1
 
     def _find_chains(self, chain_length: int) -> set[PerturbationChain]:
         chains: set[PerturbationChain] = set()
@@ -79,8 +87,7 @@ class HeuristicPerturbationChainPipeline(PerturbationChainPipeline):
         self.running_time[chain_length] = end_time - start_time
 
         for perturbation in self.heuristics:
-            self.heuristics[perturbation].reset()
-
+            self.heuristics[perturbation].reset()            
         return chains
 
 class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
@@ -116,12 +123,11 @@ class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
         graph: GraphLike,
         chain: PerturbationChain,
         chain_length: int,
-        chains: set[PerturbationChain],
-        heuristic: MCTSPerturbationHeuristic
+        chains: set[PerturbationChain]
     ) -> None:
         if (self.num_chains is not None and len(chains) >= self.num_chains) or (self.max_iterations is not None and self.num_iterations[chain_length] >= self.max_iterations):
             return
-        
+
         if len(chain) >= chain_length:
             if not chain.check_subchain_validity(self.graph, self.labeling_functions):
                 return
@@ -129,19 +135,20 @@ class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
             if all([not chain.match_perturbation_set(c) for c in chains]):
                 chains.add(chain)
         else:
-            new_heuristic = heuristic
+            counter = 0
 
             while self.max_iterations is None or self.num_iterations[chain_length] < self.max_iterations:
                 self.num_iterations[chain_length] += 1
-                new_heuristic = new_heuristic.next(graph, chain)
+                has_next = self.heuristic.next(graph, chain)
 
-                if new_heuristic is None:
+                if not has_next:
                     break
 
-                new_chain = chain + self.chain_type([new_heuristic.current()])
+                counter += 1
+                new_chain = chain + self.chain_type([self.heuristic.current()])
 
                 if any([new_chain.match_perturbation_set(detected_chain) for detected_chain in [c for c in chains if len(c) == len(new_chain)]]):
-                    break
+                    continue
 
                 result = new_chain.test_perturbation(
                     -1,
@@ -157,10 +164,13 @@ class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
                     result.graph,
                     new_chain,
                     chain_length,
-                    chains,
-                    new_heuristic
+                    chains
                 )
-                
+
+            while counter > 0:
+                self.heuristic.back()
+                counter -= 1
+
     def _find_chains(self, chain_length: int) -> set[PerturbationChain]:
         chains: set[PerturbationChain] = set()
         chains = chains.union({chain for chain in self.training_found_chains if len(chain) == chain_length})
@@ -174,8 +184,7 @@ class MCTSPerturbationChainPipeline(PerturbationChainPipeline):
             self.graph,
             self.chain_type([]),
             chain_length,
-            chains,
-            self.heuristic
+            chains
         )
         end_time = time.time()
         self.running_time[chain_length] = end_time - start_time

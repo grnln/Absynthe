@@ -10,11 +10,15 @@ class PerturbationHeuristic[T](abc.ABC):
         pass
 
     @abstractmethod
-    def next(self, graph: GraphLike, chain: Any) -> PerturbationHeuristic[T] | None:
+    def next(self, graph: GraphLike, chain: Any) -> bool:
         pass
 
     @abstractmethod
     def current(self) -> T:
+        pass
+
+    @abstractmethod
+    def back(self) -> None:
         pass
 
     @abstractmethod

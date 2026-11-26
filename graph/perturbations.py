@@ -1,5 +1,6 @@
 import random
 
+from copy import deepcopy
 from typing import Optional, Dict, Any, Tuple, List
 from interfaces import GraphLike, Perturbation, PerturbationHint, AppliedPerturbation, GraphLike
 
@@ -215,7 +216,7 @@ class RemoveNodesPerturbation(Perturbation):
 
         return AppliedPerturbation(
             self,
-            heuristic,
+            deepcopy(heuristic),
             working_graph,
             graph.copy(),
             {"removed_nodes": self._get_removed_info(graph, nodes)}
@@ -277,7 +278,7 @@ class RemoveEdgesPerturbation(Perturbation):
         
         return AppliedPerturbation(
             self,
-            heuristic,
+            deepcopy(heuristic),
             working_graph,
             graph.copy(),
             {"removed_edges": self._get_removed_info(graph, edges)}
@@ -334,7 +335,7 @@ class AddEdgesPerturbation(Perturbation):
 
         return AppliedPerturbation(
             self,
-            heuristic,
+            deepcopy(heuristic),
             working_graph,
             graph.copy(),
             {"added_edges": self._get_added_info(graph, working_graph)}

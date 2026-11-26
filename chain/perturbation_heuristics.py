@@ -5,7 +5,6 @@ import networkx as nx
 
 from math import sqrt, inf
 from pathlib import Path
-from copy import deepcopy
 from datetime import datetime
 from .mcts_tree import MCTSTree
 from typing import Any, Callable
@@ -16,18 +15,23 @@ class NaturalOrderNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         super().__init__(graph, **kwargs)
         self.traversed_nodes: list[Any] = []
 
-    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> bool:
         candidate_nodes = sorted([n for n in list(graph.nodes) if n not in self.traversed_nodes])
 
         if len(candidate_nodes) > 0:
-            new_heuristic = deepcopy(self)
-            new_heuristic.traversed_nodes.append(candidate_nodes[0])
-            return new_heuristic
+            self.traversed_nodes.append(candidate_nodes[0])
+            return True
         else:
-            return None
+            return False
  
     def current(self) -> Any:
         return self.traversed_nodes[-1]
+
+    def back(self) -> None:
+        try:
+            self.traversed_nodes.pop()
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         return graph.has_node(self.current())
@@ -50,18 +54,23 @@ class NaturalOrderEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any
         super().__init__(graph, **kwargs)
         self.traversed_edges: list[tuple[Any, Any]] = []
 
-    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> bool:
         candidate_edges = sorted([e for e in list(graph.edges) if e not in self.traversed_edges], key = lambda x: x[0])
 
         if len(candidate_edges) > 0:
-            new_heuristic = deepcopy(self)
-            new_heuristic.traversed_edges.append(candidate_edges[0])
-            return new_heuristic
+            self.traversed_edges.append(candidate_edges[0])
+            return True
         else:
-            return None
+            return False
             
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
+
+    def back(self) -> None:
+        try:
+            self.traversed_edges.pop()
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         u, v = self.current()
@@ -108,10 +117,8 @@ class ProximityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         key = kwargs['distance_func'] if 'distance_func' in kwargs else 'graph_distance'
         self.distance_func = node_distance_functions[key]
 
-    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> bool:
         perturbed_nodes_raw: list[dict[str, Any]] = []
-        
-        new_heuristic = deepcopy(self)
         candidate_nodes = [n for n in list(graph.nodes) if n not in self.traversed_nodes]
         
         for perturbation in reversed(chain):
@@ -121,10 +128,10 @@ class ProximityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
 
         if len(perturbed_nodes_raw) == 0:
             if len(candidate_nodes) > 0:
-                new_heuristic.traversed_nodes.append(candidate_nodes[0])
-                return new_heuristic
+                self.traversed_nodes.append(candidate_nodes[0])
+                return True
             else:
-                return None
+                return False
 
         perturbed_nodes = [perturbed_node['id'] for perturbed_node in perturbed_nodes_raw]
         
@@ -135,13 +142,19 @@ class ProximityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         )
         
         if len(candidate_nodes) > 0:
-            new_heuristic.traversed_nodes.append(candidate_nodes[0])
-            return new_heuristic
+            self.traversed_nodes.append(candidate_nodes[0])
+            return True
         else:
-            return None
+            return False
 
     def current(self) -> tuple[Any, Any]:
         return self.traversed_nodes[-1]
+
+    def back(self) -> None:
+        try:
+            self.traversed_nodes.pop()
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         return graph.has_node(self.current())
@@ -190,10 +203,8 @@ class ProximityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]])
         key = kwargs['distance_func'] if 'distance_func' in kwargs else 'graph_distance'
         self.distance_func = edge_distance_functions[key]
 
-    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> bool:
         perturbed_edges_raw: list[dict[str, Any]] = []
-
-        new_heuristic = deepcopy(self)
         candidate_edges = [e for e in list(graph.edges) if e not in self.traversed_edges]
         
         for perturbation in reversed(chain):
@@ -203,10 +214,10 @@ class ProximityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]])
                     
         if len(perturbed_edges_raw) == 0:
             if len(candidate_edges) > 0:
-                new_heuristic.traversed_edges.append(candidate_edges[0])
-                return new_heuristic
+                self.traversed_edges.append(candidate_edges[0])
+                return True
             else:
-                return None
+                return False
 
         perturbed_edges = [(perturbed_edge['u'], perturbed_edge['v']) for perturbed_edge in perturbed_edges_raw]
         
@@ -217,13 +228,19 @@ class ProximityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]])
         )
         
         if len(candidate_edges) > 0:
-            new_heuristic.traversed_edges.append(candidate_edges[0])
-            return new_heuristic
+            self.traversed_edges.append(candidate_edges[0])
+            return True
         else:
-            return None
+            return False
 
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
+
+    def back(self) -> None:
+        try:
+            self.traversed_edges.pop()
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         u, v = self.current()
@@ -248,7 +265,7 @@ class CentralityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         self.traversed_nodes: list[Any] = []
         self.initial_centrality = nx.betweenness_centrality(graph)
 
-    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> bool:
         centrality = nx.edge_betweenness_centrality(graph)
         candidate_nodes: list[tuple[Any, float]] = []
 
@@ -259,14 +276,19 @@ class CentralityNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         candidate_nodes.sort(key = lambda x: x[1], reverse = True)
 
         if len(candidate_nodes) > 0:
-            new_heuristic = deepcopy(self)
-            new_heuristic.traversed_nodes.append(candidate_nodes[0])
-            return new_heuristic
+            self.traversed_nodes.append(candidate_nodes[0])
+            return True
         else:
-            return None
+            return False
 
     def current(self) -> Any:
         return self.traversed_nodes[-1]
+
+    def back(self) -> None:
+        try:
+            self.traversed_nodes.pop()
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         return graph.has_node(self.current())
@@ -301,14 +323,19 @@ class CentralityEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]
         candidate_edges.sort(key = lambda x: x[1], reverse = True)
 
         if len(candidate_edges) > 0:
-            new_heuristic = deepcopy(self)
-            new_heuristic.traversed_edges.append(candidate_edges[0][0])
-            return new_heuristic
+            self.traversed_edges.append(candidate_edges[0][0])
+            return self
         else:
             return None
 
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
+
+    def back(self) -> None:
+        try:
+            self.traversed_edges.pop()
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         u, v = self.current()
@@ -332,11 +359,10 @@ class ConnectedComponentsNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         super().__init__(graph, **kwargs)
         self.traversed_nodes: list[Any] = []
 
-    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> bool:
         last_perturbed_node = None
         last_perturbed_graph = graph
         candidate_nodes = [n for n in list(graph.nodes) if n not in self.traversed_nodes]
-        new_heuristic = deepcopy(self)
         
         for perturbation in reversed(chain):
             for perturbation_type in node_perturbation_types:
@@ -348,23 +374,29 @@ class ConnectedComponentsNodePerturbationHeuristic(PerturbationHeuristic[Any]):
 
         if last_perturbed_node is None:
             if len(candidate_nodes) > 0:
-                new_heuristic.traversed_nodes.append(candidate_nodes[0])
-                return new_heuristic
+                self.traversed_nodes.append(candidate_nodes[0])
+                return True
             else:
-                return None
+                return False
 
         component = nx.node_connected_component(last_perturbed_graph, last_perturbed_node)
         candidate_nodes = [n for n in candidate_nodes if n in component]
 
         if len(candidate_nodes) <= 0:
-            return None
+            return False
 
         node_distances = {n: node_graph_distance(last_perturbed_node, n, last_perturbed_graph) for n in candidate_nodes}
-        new_heuristic.traversed_nodes.append(min(candidate_nodes, key = lambda n: node_distances[n]))
-        return new_heuristic
+        self.traversed_nodes.append(min(candidate_nodes, key = lambda n: node_distances[n]))
+        return True
 
     def current(self) -> Any:
         return self.traversed_nodes[-1]
+
+    def back(self) -> None:
+        try:
+            self.traversed_nodes.pop()
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         return graph.has_node(self.current())
@@ -409,11 +441,10 @@ class ConnectedComponentsEdgePerturbationHeuristic(PerturbationHeuristic[tuple[A
         edge = min(edge_distances.keys(), key = lambda e: (-edge_weights[e], edge_distances[e]))
         return edge, edge_weights[edge]
 
-    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> bool:
         last_perturbed_edge = None
         last_perturbed_graph = graph
         candidate_edges = [e for e in list(graph.edges) if e not in self.traversed_edges]
-        new_heuristic = deepcopy(self)
         
         for perturbation in reversed(chain):
             for perturbation_type in edge_perturbation_types:
@@ -425,10 +456,10 @@ class ConnectedComponentsEdgePerturbationHeuristic(PerturbationHeuristic[tuple[A
 
         if last_perturbed_edge is None:
             if len(candidate_edges) > 0:
-                new_heuristic.traversed_edges.append(candidate_edges[0])
-                return new_heuristic
+                self.traversed_edges.append(candidate_edges[0])
+                return True
             else:
-                return None
+                return False
         
         edge_distances = {e: edge_graph_distance(last_perturbed_edge, e, last_perturbed_graph) for e in candidate_edges}
 
@@ -443,19 +474,25 @@ class ConnectedComponentsEdgePerturbationHeuristic(PerturbationHeuristic[tuple[A
 
                 if weight_v > weight:
                     edge = edge_v
-            new_heuristic.traversed_edges.append(edge)
+            self.traversed_edges.append(edge)
         elif result_v is not None:
             edge, _ = result_v
-            new_heuristic.traversed_edges.append(edge)
+            self.traversed_edges.append(edge)
         else:
             if len(candidate_edges) > 0:
-                new_heuristic.traversed_edges.append(candidate_edges[0])
+                self.traversed_edges.append(candidate_edges[0])
             else:
-                new_heuristic = None
-        return new_heuristic
+                return False
+        return True
 
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
+
+    def back(self) -> None:
+        try:
+            self.traversed_edges.pop()
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         u, v = self.current()
@@ -479,18 +516,23 @@ class RandomNodePerturbationHeuristic(PerturbationHeuristic[Any]):
         super().__init__(graph, **kwargs)
         self.traversed_nodes: list[Any] = []
 
-    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[Any] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> bool:
         candidate_nodes = sorted([n for n in list(graph.nodes) if n not in self.traversed_nodes])
 
         if len(candidate_nodes) > 0:
-            new_heuristic = deepcopy(self)
-            new_heuristic.traversed_nodes.append(random.choice(candidate_nodes))
-            return new_heuristic
+            self.traversed_nodes.append(random.choice(candidate_nodes))
+            return True
         else:
-            return None
+            return False
  
     def current(self) -> Any:
         return self.traversed_nodes[-1]
+
+    def back(self) -> None:
+        try:
+            self.traversed_nodes.pop()
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         return graph.has_node(self.current())
@@ -513,18 +555,23 @@ class RandomEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
         super().__init__(graph, **kwargs)
         self.traversed_edges: list[tuple[Any, Any]] = []
 
-    def next(self, graph: GraphLike, chain: PerturbationChain) -> PerturbationHeuristic[tuple[Any, Any]] | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> bool:
         candidate_edges = sorted([e for e in list(graph.edges) if e not in self.traversed_edges], key = lambda x: x[0])
 
         if len(candidate_edges) > 0:
-            new_heuristic = deepcopy(self)
-            new_heuristic.traversed_edges.append(random.choice(candidate_edges))
-            return new_heuristic
+            self.traversed_edges.append(random.choice(candidate_edges))
+            return True
         else:
-            return None
+            return False
             
     def current(self) -> tuple[Any, Any]:
         return self.traversed_edges[-1]
+
+    def back(self) -> None:
+        try:
+            self.traversed_edges.pop()
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         u, v = self.current()
@@ -542,6 +589,8 @@ class RandomEdgePerturbationHeuristic(PerturbationHeuristic[tuple[Any, Any]]):
 
     def add(self, element: tuple[Any, Any]) -> None:
         self.traversed_edges.append(element)
+
+from line_profiler import profile
 
 class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
     def __init__(
@@ -632,7 +681,7 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
     def _check_valid_perturbation(self, graph: GraphLike, perturbation: AppliedPerturbation) -> bool:
         return perturbation.heuristic.current_in_graph(graph)
 
-    def next(self, graph: GraphLike, chain: PerturbationChain) -> MCTSPerturbationHeuristic | None:
+    def next(self, graph: GraphLike, chain: PerturbationChain) -> bool:
         node = self.tree
 
         for perturbation in chain:
@@ -651,20 +700,29 @@ class MCTSPerturbationHeuristic(PerturbationHeuristic[AppliedPerturbation]):
             ]
 
         if len(candidate_nodes) < 1:
-            return None
+            return False
 
-        new_heuristic = deepcopy(self)
         candidate_nodes.sort(key = lambda c: c.num_simulations, reverse = True)
         selected_node = candidate_nodes[0]
 
         if len(chain) in self.traversed_nodes:
-            new_heuristic.traversed_nodes[len(chain)].append(selected_node)
+            self.traversed_nodes[len(chain)].append(selected_node)
         else:
-            new_heuristic.traversed_nodes[len(chain)] = [selected_node]
-        return new_heuristic
+            self.traversed_nodes[len(chain)] = [selected_node]
+        return True
 
     def current(self) -> AppliedPerturbation:
         return self.traversed_nodes[max(self.traversed_nodes.keys())][-1].chain[-1]
+
+    def back(self) -> None:
+        try:
+            current = max(self.traversed_nodes.keys())
+            self.traversed_nodes[current].pop()
+
+            if len(self.traversed_nodes[current]) <= 0:
+                self.traversed_nodes.pop(current)
+        except IndexError:
+            pass
 
     def current_in_graph(self, graph: GraphLike) -> bool:
         return self._check_valid_perturbation(graph, self.current())

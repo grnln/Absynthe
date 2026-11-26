@@ -10,8 +10,8 @@
     "num_extra_vertices": 2,
     "num_extra_vertices_distribution": { "type": "normal", "params": { "mean": 10, "std": 3 }, "min": 0 },
     "num_extra_edges": 0,
-    "max_workers": 10,
-    "max_tasks_per_worker": 8,
+    "max_workers": 4,
+    "max_tasks_per_worker": 10,
     "chain_configs": [
       {
         "name": "heuristic_natural_order",
@@ -19,7 +19,7 @@
         "chain_type": "base",
         "kwargs": {
             "max_length": 4,
-            "max_iterations": 1000,
+            "max_iterations": 500,
             "num_chains": 4
         }
       }, {
@@ -28,7 +28,7 @@
         "chain_type": "base",
         "kwargs": {
             "max_length": 4,
-            "max_iterations": 1000,
+            "max_iterations": 500,
             "num_chains": 4
         }
       }, {
@@ -37,7 +37,7 @@
         "chain_type": "base",
         "kwargs": {
             "max_length": 4,
-            "max_iterations": 1000,
+            "max_iterations": 500,
             "num_chains": 4
         }
       }, {
@@ -46,7 +46,7 @@
         "chain_type": "base",
         "kwargs": {
             "max_length": 4,
-            "max_iterations": 1000,
+            "max_iterations": 500,
             "num_chains": 4
         }
       }, {
@@ -55,7 +55,7 @@
         "chain_type": "base",
         "kwargs": {
             "max_length": 4,
-            "max_iterations": 1000,
+            "max_iterations": 500,
             "max_training_iterations": 100,
             "mcts_exploration_param": 1.41,
             "num_chains": 4,

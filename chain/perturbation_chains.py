@@ -28,30 +28,23 @@ class BasePerturbationChain(PerturbationChain):
         result = False
         changed_nodes: dict[int, tuple[Any, Any]] | None = None
 
-        new_heuristic = heuristic
         original_result = compute_labels(graph, labeling_functions)
         candidate_result = original_result
 
-        while result is False:
-            new_heuristic = new_heuristic.next(graph, self)
+        out = perturbation.apply_heuristic(
+            graph, heuristic
+        )
 
-            if new_heuristic is None:
-                break
-            
-            out = perturbation.apply_heuristic(
-                graph, new_heuristic
-            )
-
-            # Check for label changes
-            candidate_result = compute_labels(out.graph, labeling_functions)
-            changed_nodes, changed_edges, changed_graphs = self.get_changes(original_result, candidate_result)
-            
-            out.set_labeling_changes(changed_nodes, changed_edges, changed_graphs)
-
-            if changed_nodes or changed_edges or changed_graphs:
-                result = desired_result
-            else:
-                result = not desired_result
+        # Check for label changes
+        candidate_result = compute_labels(out.graph, labeling_functions)
+        changed_nodes, changed_edges, changed_graphs = self.get_changes(original_result, candidate_result)
+        
+        out.set_labeling_changes(changed_nodes, changed_edges, changed_graphs)
+        
+        if changed_nodes or changed_edges or changed_graphs:
+            result = desired_result
+        else:
+            result = not desired_result
 
         if not result:
             out = None
@@ -183,13 +176,8 @@ class NewChangedElementsPerturbationChain(PerturbationChain):
         graph: GraphLike,
         desired_result: bool = False
     ) -> AppliedPerturbation | None:
-        new_heuristic = heuristic.next(graph, self)
-
-        if new_heuristic is None:
-            return None
-        
         out = perturbation.apply_heuristic(
-            graph, new_heuristic
+            graph, heuristic
         )
         original_result = compute_labels(graph, labeling_functions)
         candidate_result = compute_labels(out.graph, labeling_functions)

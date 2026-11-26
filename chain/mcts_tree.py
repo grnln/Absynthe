@@ -42,16 +42,14 @@ class MCTSTree:
 
             while True:
                 graph = self.chain[-1].graph if len(self.chain) > 0 else self.graph
-                heuristic = heuristic.next(graph, self.chain)
+                has_next = heuristic.next(graph, self.chain)
 
-                if heuristic is None:
+                if not has_next:
                     self.expanded[perturbation] = True
                     break
                 
-                self.expansion_heuristics[perturbation] = heuristic
-
-                result = perturbation.apply_heuristic(graph, deepcopy(heuristic))
-                new_chain = self.chain + self.chain_type([result])                
+                result = perturbation.apply_heuristic(graph, heuristic)
+                new_chain = self.chain + self.chain_type([result])
 
                 heuristics = {p: deepcopy(self.initial_heuristics[p]) for p in self.initial_heuristics}
                 heuristics[perturbation].add(heuristic.current())
@@ -66,7 +64,7 @@ class MCTSTree:
                 
                 if child not in self.children:
                     self.add_child(child)
-                    break
+                    return
 
     def simulate(
         self,
@@ -76,18 +74,28 @@ class MCTSTree:
         chains: set[PerturbationChain]
     ) -> bool:
         step = 0
-        chain = deepcopy(self.chain)
+        chain = self.chain_type(self.chain.perturbations)
 
         acc_graph = self.chain[-1].graph if len(self.chain) > 0 else self.graph
         num_steps = chain_length - self.level
 
         while step < num_steps:
             perturbation = random.choice(list(self.expansion_heuristics.keys()))
-            result = chain.test_potential_perturbation(
-                perturbation,
-                self.simulation_heuristics[perturbation],
-                labeling_functions, acc_graph, step >= (num_steps - 1)
-            )
+            result = None
+
+            while result is None:
+                has_next = self.simulation_heuristics[perturbation].next(acc_graph, chain)
+
+                if not has_next:
+                    break
+                
+                result = chain.test_potential_perturbation(
+                    perturbation,
+                    self.simulation_heuristics[perturbation],
+                    labeling_functions,
+                    acc_graph,
+                    step >= (num_steps - 1)
+                )
 
             if result is None:
                 return False
@@ -95,7 +103,6 @@ class MCTSTree:
             chain.append(result)
             acc_graph = result.graph
 
-            self.simulation_heuristics[perturbation] = result.heuristic
             step += 1
 
         self.simulation_heuristics = {p: deepcopy(self.expansion_heuristics[p]) for p in self.expansion_heuristics}
